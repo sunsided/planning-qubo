@@ -13,6 +13,7 @@
 //! Repository: <https://github.com/sunsided/planning-qubo>
 
 #![no_std]
+#![forbid(unsafe_code)]
 
 /// A source of low-energy samples for a QUBO model, classical or quantum.
 pub trait Sampler<Model> {
