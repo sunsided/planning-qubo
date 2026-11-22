@@ -22,3 +22,8 @@ pub trait Sampler<Model> {
     /// Draws a sample, aiming for low energy under `model`.
     fn sample(&mut self, model: &Model) -> Self::Sample;
 }
+
+/// Doctests for the code examples in README.md (not part of the API).
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+mod readme_doctests {}
