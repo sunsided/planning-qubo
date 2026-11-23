@@ -26,64 +26,43 @@ Encodings fit annealers and QAOA as well as classical solvers, so the crate is u
 cargo add planning-qubo
 ```
 
-A sampler draws low-energy assignments of a model's binary variables. Here, a job takes
-exactly one of three time slots that cost 3, 1 and 2. The costs sit on the diagonal of the
-QUBO, and the exactly-one constraint becomes the penalty `P·(1 − x₀ − x₁ − x₂)²`, which
-adds `−P` to each diagonal entry and `2P` to each pair. An exhaustive sampler, the baseline
-for small models, tries every assignment.
+Build a QUBO model from named variables, objective terms and penalized constraints, then
+draw low-energy samples and check them against the constraints. Here, a job takes exactly
+one of three time slots that cost 3, 1 and 2. The exactly-one constraint becomes the
+penalty `P·(1 − x₀ − x₁ − x₂)²`; with `P` above the total cost, every ground state is
+feasible.
 
 ```rust
-use planning_qubo::Sampler;
+use planning_qubo::{Builder, Exhaustive, Sampler};
 
-/// A QUBO over three binary variables, upper triangular: `E(x) = Σ q[i][j]·xᵢ·xⱼ` for `i ≤ j`.
-struct Qubo {
-    q: [[i64; 3]; 3],
+let mut builder = Builder::<i64>::new();
+let slots = ["early", "noon", "late"].map(|name| builder.variable(name));
+
+for (&slot, cost) in slots.iter().zip([3, 1, 2]) {
+    builder.add_linear(slot, cost);
 }
 
-impl Qubo {
-    /// The energy of one assignment.
-    fn energy(&self, x: [bool; 3]) -> i64 {
-        let mut energy = 0;
-        for i in 0..3 {
-            for j in i..3 {
-                if x[i] && x[j] {
-                    energy += self.q[i][j];
-                }
-            }
-        }
+builder.exactly_one("one slot", &slots, 7);
+let problem = builder.build();
 
-        energy
-    }
-}
+let sample = Exhaustive.sample(problem.qubo())?;
 
-/// Tries all eight assignments and keeps one with the lowest energy.
-struct Exhaustive;
+assert_eq!(sample.bits, [false, true, false]);
+assert_eq!(sample.energy, 1);
+assert_eq!(problem.violations(&sample.bits).count(), 0);
 
-impl Sampler<Qubo> for Exhaustive {
-    type Sample = [bool; 3];
-
-    fn sample(&mut self, model: &Qubo) -> [bool; 3] {
-        (0..8_u8)
-            .map(|bits| [bits & 1 != 0, bits & 2 != 0, bits & 4 != 0])
-            .min_by_key(|&x| model.energy(x))
-            .expect("there are eight assignments")
-    }
-}
-
-// Slot costs 3, 1, 2 with penalty weight P = 4.
-let model = Qubo {
-    q: [[3 - 4, 8, 8], [0, 1 - 4, 8], [0, 0, 2 - 4]],
-};
-
-let slots = Exhaustive.sample(&model);
-
-assert_eq!(slots, [false, true, false]);
-
-// Taking two slots breaks the constraint and costs more than the cheapest single slot.
-assert!(model.energy([true, true, false]) > model.energy(slots));
+// The same model as an Ising model: i64 energies are scaled by 4 to stay exact.
+let ising = problem.qubo().to_ising();
+assert_eq!(ising.energy(&sample.bits), 4 * sample.energy);
+# Ok::<(), planning_qubo::TooManyVariables>(())
 ```
 
-The crate is `no_std` and has no dependencies.
+The `assignment` module encodes the assignment of tasks to agents with capacities, and
+decodes a sample into the agent of each task plus the names of the violated constraints.
+`SimulatedAnnealing` samples larger models from any seedable `rand_core` RNG.
+
+Models store coefficients as `i64` (exact, overflow is checked) or `f64`. The crate is
+`no_std` with `alloc`, and depends on `libm` and `rand_core` only.
 
 ## Minimum supported Rust version
 
