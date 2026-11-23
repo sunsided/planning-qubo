@@ -1,73 +1,170 @@
 //! The simulated annealing sampler.
 
 use alloc::vec::Vec;
-use core::convert::Infallible;
+use core::fmt;
 
 use rand_core::Rng;
+use search_core::Budget;
 
 use super::adjacency::Adjacency;
-use crate::{Coefficient, Qubo, Sample, Sampler};
+use crate::{Coefficient, Qubo, Run, Sample, SampleError, Sampler, Status};
 
 /// Simulated annealing with single-bit Metropolis flips and a geometric schedule.
 ///
-/// Each call starts from a uniform random assignment and runs `sweeps` sweeps. A sweep
-/// visits each variable once, in index order, and flips it with the Metropolis rule. The
-/// inverse temperature `β` grows geometrically from a hot to a cold value that the sampler
-/// derives from the model:
+/// Each [`Sampler::sample`] call starts from a uniform random assignment and runs the
+/// sweeps of its [`Schedule`]. A sweep visits each variable once, in index order, and
+/// tries to flip it with the Metropolis rule. The inverse temperature `β` grows
+/// geometrically from a hot to a cold value over the sweeps.
 ///
-/// - hot: the largest possible flip delta is accepted with probability 1/2;
-/// - cold: the smallest nonzero coefficient magnitude is accepted with probability 1/100.
+/// The unit of work is one flip attempt ([`AnnealingStats::flips`]). A run that the budget
+/// stops resumes at the same variable, sweep and RNG state, so a run in slices gives the
+/// same result as one run without a budget. The sampler returns the lowest-energy
+/// assignment that it visits, not the last one. Energies are kept in `T`, so they are
+/// exact for [`i64`]; only the acceptance test uses [`f64`].
 ///
-/// The sampler returns the lowest-energy assignment that it visits, not the last one. The
-/// dynamics use [`f64`] deltas; the returned energy is exact, from
-/// [`Qubo::energy`].
-///
-/// The RNG is the only randomness, so a seeded RNG gives reproducible samples. The sampler
-/// keeps its buffers between calls.
+/// The RNG is the only randomness, so a seeded RNG gives reproducible samples. The
+/// sampler keeps its workspace between calls: a warm call allocates nothing.
 #[derive(Debug, Clone)]
-pub struct SimulatedAnnealing<R> {
+pub struct SimulatedAnnealing<R, T> {
     /// The random source for the initial state and the acceptance tests.
     rng: R,
-    /// The number of sweeps per sample. At least 1.
-    sweeps: u32,
-    /// The model coefficients as `f64`, reused between calls.
-    adjacency: Adjacency<f64>,
-    /// The current assignment, reused between calls.
+    /// The number of sweeps and the `β` range.
+    schedule: Schedule,
+    /// The model copy of the current run.
+    adjacency: Adjacency<T>,
+    /// The current assignment. Same length as the model.
     current: Vec<bool>,
+    /// The energy of `current`.
+    energy: T,
+    /// The lowest-energy assignment that the run has visited.
+    best: Vec<bool>,
+    /// The energy of `best`.
+    best_energy: T,
+    /// The hot and cold `β` of the current run.
+    betas: (f64, f64),
+    /// The index of the current sweep. The run is finished when it reaches the sweep count.
+    sweep: u32,
+    /// The next variable to visit in the current sweep.
+    position: usize,
+    /// `false` until the first [`Sampler::sample`] call.
+    started: bool,
 }
 
-impl<R: Rng> SimulatedAnnealing<R> {
-    /// Creates a sampler that draws from `rng` and runs `sweeps` sweeps per sample.
+/// The annealing schedule: the number of sweeps and the range of the inverse temperature.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Schedule {
+    /// The number of sweeps per run. At least 1.
+    sweeps: u32,
+    /// The hot and cold `β`, or `None` to derive them from the model.
+    betas: Option<(f64, f64)>,
+}
+
+impl Schedule {
+    /// A schedule with `sweeps` sweeps and a `β` range from the model. This is the default.
+    ///
+    /// - hot: the largest possible flip delta is accepted with probability 1/2;
+    /// - cold: the smallest nonzero coefficient magnitude is accepted with probability 1/100.
     ///
     /// A `sweeps` value of 0 counts as 1.
     #[must_use]
-    pub fn new(rng: R, sweeps: u32) -> Self {
+    pub fn from_model(sweeps: u32) -> Self {
+        Self {
+            sweeps: sweeps.max(1),
+            betas: None,
+        }
+    }
+
+    /// A schedule with `sweeps` sweeps and `β` from `hot` to `cold`, geometrically.
+    ///
+    /// The units of `β` are inverse energy units of the model. A `sweeps` value of 0 counts
+    /// as 1; a single sweep runs at `cold`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidSchedule`] if `hot` or `cold` is not finite and positive.
+    pub fn geometric(sweeps: u32, hot: f64, cold: f64) -> Result<Self, InvalidSchedule> {
+        if !is_valid_beta(hot) || !is_valid_beta(cold) {
+            return Err(InvalidSchedule);
+        }
+
+        Ok(Self {
+            sweeps: sweeps.max(1),
+            betas: Some((hot, cold)),
+        })
+    }
+
+    /// The number of sweeps per run.
+    #[must_use]
+    pub fn sweeps(&self) -> u32 {
+        self.sweeps
+    }
+}
+
+/// Returns `true` if `beta` is finite and positive.
+fn is_valid_beta(beta: f64) -> bool {
+    beta.is_finite() && beta > 0.0
+}
+
+/// The error when a [`Schedule`] has a `β` that is not finite and positive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidSchedule;
+
+impl fmt::Display for InvalidSchedule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("the annealing betas must be finite and positive")
+    }
+}
+
+impl core::error::Error for InvalidSchedule {}
+
+/// The work counters of one [`SimulatedAnnealing`] call.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AnnealingStats {
+    /// The number of sweeps that the call completed.
+    pub sweeps: u64,
+    /// The number of flip attempts (Metropolis steps) that the call made.
+    pub flips: u64,
+    /// The number of flip attempts that the Metropolis rule accepted.
+    pub accepted: u64,
+}
+
+impl<R: Rng, T: Coefficient> SimulatedAnnealing<R, T> {
+    /// Creates a sampler that draws from `rng` and follows `schedule`.
+    #[must_use]
+    pub fn new(rng: R, schedule: Schedule) -> Self {
         Self {
             rng,
-            sweeps: sweeps.max(1),
-            adjacency: Adjacency::default(),
+            schedule,
+            adjacency: Adjacency::new(),
             current: Vec::new(),
+            energy: T::ZERO,
+            best: Vec::new(),
+            best_energy: T::ZERO,
+            betas: (1.0, 1.0),
+            sweep: 0,
+            position: 0,
+            started: false,
         }
     }
 
-    /// Runs the sweeps and returns the lowest-energy assignment that it visits.
-    fn anneal(&mut self) -> Vec<bool> {
+    /// Resets the workspace for a new run on `model`, from a random assignment.
+    fn start(&mut self, model: &Qubo<T>) {
+        self.adjacency.rebuild(model);
         self.randomize_current();
-
-        let (hot, cold) = beta_range(&self.adjacency);
-        let mut best = self.current.clone();
-        let mut energy = 0.0;
-        let mut best_energy = 0.0;
-
-        for sweep in 0..self.sweeps {
-            let beta = geometric(hot, cold, sweep, self.sweeps);
-            energy = self.sweep(beta, energy, &mut best, &mut best_energy);
-        }
-
-        best
+        self.energy = self.adjacency.energy(&self.current);
+        self.best.clear();
+        self.best.extend_from_slice(&self.current);
+        self.best_energy = self.energy;
+        self.betas = self
+            .schedule
+            .betas
+            .unwrap_or_else(|| beta_range(&self.adjacency));
+        self.sweep = 0;
+        self.position = 0;
+        self.started = true;
     }
 
-    /// Sets the current assignment to uniform random bits.
+    /// Sets the current assignment to uniform random bits. Reuses the buffer.
     fn randomize_current(&mut self) {
         let n = self.adjacency.len();
         self.current.clear();
@@ -83,56 +180,121 @@ impl<R: Rng> SimulatedAnnealing<R> {
         }
     }
 
-    /// Runs one Metropolis sweep at `beta` from the energy `start`, and returns the end energy.
-    ///
-    /// Energies are relative to the initial assignment. When the energy goes below
-    /// `best_energy`, the sweep copies the current assignment to `best`.
-    fn sweep(&mut self, beta: f64, start: f64, best: &mut Vec<bool>, best_energy: &mut f64) -> f64 {
-        let mut energy = start;
+    /// Runs the remaining sweeps until the run finishes or `budget` is exhausted.
+    fn run<B: Budget<AnnealingStats>>(
+        &mut self,
+        mut budget: B,
+    ) -> Run<Sample<'_, T>, AnnealingStats> {
+        let mut stats = AnnealingStats::default();
 
-        for i in 0..self.current.len() {
-            let delta = self.adjacency.flip_delta(i, &self.current);
-
-            if !self.accepts(delta, beta) {
-                continue;
+        while self.sweep < self.schedule.sweeps {
+            if !self.continue_sweep(&mut budget, &mut stats) {
+                return self.result(Status::OutOfBudget, stats);
             }
 
-            self.current[i] = !self.current[i];
-            energy += delta;
-
-            if energy < *best_energy {
-                *best_energy = energy;
-                best.clone_from(&self.current);
-            }
+            self.position = 0;
+            self.sweep += 1;
+            stats.sweeps += 1;
         }
 
-        energy
+        self.result(Status::Finished, stats)
+    }
+
+    /// Runs the current sweep from `position` to its end.
+    ///
+    /// Returns `false` if `budget` is exhausted before the sweep ends.
+    fn continue_sweep<B: Budget<AnnealingStats>>(
+        &mut self,
+        budget: &mut B,
+        stats: &mut AnnealingStats,
+    ) -> bool {
+        let (hot, cold) = self.betas;
+        let beta = geometric(hot, cold, self.sweep, self.schedule.sweeps);
+
+        while self.position < self.current.len() {
+            if budget.exhausted(stats) {
+                return false;
+            }
+
+            stats.accepted += u64::from(self.metropolis_step(self.position, beta));
+            stats.flips += 1;
+            self.position += 1;
+        }
+
+        true
+    }
+
+    /// Tries to flip variable `i` at `beta`, and keeps a new best. Returns `true` on a flip.
+    fn metropolis_step(&mut self, i: usize, beta: f64) -> bool {
+        let delta = self.adjacency.flip_delta(i, &self.current);
+
+        if !self.accepts(delta.to_f64(), beta) {
+            return false;
+        }
+
+        self.current[i] = !self.current[i];
+        self.energy = self.energy.plus(delta);
+
+        if self.energy < self.best_energy {
+            self.best_energy = self.energy;
+            self.best.copy_from_slice(&self.current);
+        }
+
+        true
     }
 
     /// The Metropolis rule: accept a decrease, and an increase with probability `exp(−β·Δ)`.
     fn accepts(&mut self, delta: f64, beta: f64) -> bool {
         delta <= 0.0 || unit_interval(self.rng.next_u64()) < libm::exp(-beta * delta)
     }
-}
 
-impl<R: Rng, T: Coefficient> Sampler<Qubo<T>> for SimulatedAnnealing<R> {
-    type Sample = Sample<T>;
-    type Error = Infallible;
-
-    fn sample(&mut self, model: &Qubo<T>) -> Result<Sample<T>, Infallible> {
-        self.adjacency.rebuild(model, Coefficient::to_f64);
-
-        let bits = self.anneal();
-        let energy = model.energy(&bits);
-
-        Ok(Sample { bits, energy })
+    /// Borrows the best assignment with its exact energy.
+    fn result(&self, status: Status, work: AnnealingStats) -> Run<Sample<'_, T>, AnnealingStats> {
+        Run {
+            sample: Sample {
+                bits: &self.best,
+                energy: self.adjacency.energy(&self.best),
+            },
+            status,
+            stats: work,
+        }
     }
 }
 
-/// The hot and cold inverse temperatures for `adjacency`.
+impl<R: Rng, T: Coefficient> Sampler<Qubo<T>> for SimulatedAnnealing<R, T> {
+    type Stats = AnnealingStats;
+    type Sample<'a>
+        = Sample<'a, T>
+    where
+        Self: 'a;
+    type Error = SampleError;
+
+    fn sample<B: Budget<AnnealingStats>>(
+        &mut self,
+        model: &Qubo<T>,
+        budget: B,
+    ) -> Result<Run<Sample<'_, T>, AnnealingStats>, SampleError> {
+        self.start(model);
+
+        Ok(self.run(budget))
+    }
+
+    fn resume<B: Budget<AnnealingStats>>(
+        &mut self,
+        budget: B,
+    ) -> Result<Run<Sample<'_, T>, AnnealingStats>, SampleError> {
+        if !self.started {
+            return Err(SampleError::NothingToResume);
+        }
+
+        Ok(self.run(budget))
+    }
+}
+
+/// The hot and cold inverse temperatures that [`Schedule::from_model`] derives.
 ///
 /// For a model without nonzero coefficients both values are 1; any schedule is then exact.
-fn beta_range(adjacency: &Adjacency<f64>) -> (f64, f64) {
+fn beta_range<T: Coefficient>(adjacency: &Adjacency<T>) -> (f64, f64) {
     let largest_delta = (0..adjacency.len())
         .map(|i| largest_flip_delta(adjacency, i))
         .fold(0.0, f64::max);
@@ -150,21 +312,23 @@ fn beta_range(adjacency: &Adjacency<f64>) -> (f64, f64) {
 }
 
 /// An upper bound on the flip delta magnitude of variable `i`: `|aᵢ| + Σⱼ |bᵢⱼ|`.
-fn largest_flip_delta(adjacency: &Adjacency<f64>, i: usize) -> f64 {
+fn largest_flip_delta<T: Coefficient>(adjacency: &Adjacency<T>, i: usize) -> f64 {
     adjacency
         .row(i)
         .iter()
-        .fold(adjacency.linear(i).abs(), |sum, &(_, b)| sum + b.abs())
+        .fold(adjacency.linear(i).to_f64().abs(), |sum, &(_, b)| {
+            sum + b.to_f64().abs()
+        })
 }
 
 /// The smallest nonzero coefficient magnitude, or infinity if all coefficients are zero.
-fn smallest_nonzero_magnitude(adjacency: &Adjacency<f64>) -> f64 {
+fn smallest_nonzero_magnitude<T: Coefficient>(adjacency: &Adjacency<T>) -> f64 {
     let linear = (0..adjacency.len()).map(|i| adjacency.linear(i));
     let pairs = (0..adjacency.len()).flat_map(|i| adjacency.row(i).iter().map(|&(_, b)| b));
 
     linear
         .chain(pairs)
-        .map(f64::abs)
+        .map(|v| v.to_f64().abs())
         .filter(|&v| v > 0.0)
         .fold(f64::INFINITY, f64::min)
 }
@@ -197,7 +361,7 @@ fn unit_interval(bits: u64) -> f64 {
 /// Unit tests for the schedule helpers.
 #[cfg(test)]
 mod tests {
-    use super::{geometric, unit_interval};
+    use super::{InvalidSchedule, Schedule, geometric, unit_interval};
 
     /// The schedule starts hot and ends cold.
     #[test]
@@ -212,5 +376,14 @@ mod tests {
     fn unit_interval_is_half_open() {
         assert!(unit_interval(0).abs() < f64::EPSILON);
         assert!(unit_interval(u64::MAX) < 1.0);
+    }
+
+    /// A geometric schedule needs finite, positive betas.
+    #[test]
+    fn geometric_schedule_validates_betas() {
+        assert!(Schedule::geometric(10, 0.1, 5.0).is_ok());
+        assert_eq!(Schedule::geometric(10, 0.0, 5.0), Err(InvalidSchedule));
+        assert_eq!(Schedule::geometric(10, 0.1, f64::NAN), Err(InvalidSchedule));
+        assert_eq!(Schedule::from_model(0).sweeps(), 1);
     }
 }

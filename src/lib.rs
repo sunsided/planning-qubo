@@ -12,7 +12,8 @@
 //!
 //! Available now: [`Qubo`] and [`Ising`] models with exact conversion in both directions,
 //! the penalty [`Builder`], the [`assignment`] encoder and decoder, and the [`Exhaustive`]
-//! and [`SimulatedAnnealing`] samplers.
+//! and [`SimulatedAnnealing`] samplers. Samplers reuse their workspace, stop on a
+//! [`Budget`] and [`resume`](Sampler::resume) later.
 //!
 //! ## Pipeline
 //!
@@ -28,14 +29,15 @@
 //! ## Example
 //!
 //! ```
-//! use planning_qubo::{Exhaustive, Sampler, assignment};
+//! use planning_qubo::{Exhaustive, Sampler, Unlimited, assignment};
 //!
 //! // Two tasks, two agents, one task per agent. The penalty weight exceeds the sum of all costs.
 //! let costs = [vec![4, 1], vec![2, 3]];
 //! let encoding = assignment::encode(&costs, &[1, 1], 11)?;
 //!
-//! let sample = Exhaustive.sample(encoding.problem().qubo())?;
-//! let decoded = encoding.decode(&sample.bits);
+//! let mut sampler = Exhaustive::new();
+//! let run = sampler.sample(encoding.problem().qubo(), Unlimited)?;
+//! let decoded = encoding.decode(run.sample.bits);
 //!
 //! assert_eq!(decoded.agents, [Some(1), Some(0)]);
 //! assert_eq!(decoded.cost, 3);
@@ -61,7 +63,11 @@ pub use builder::{Builder, Constraint, ConstraintKind, Problem, Var};
 pub use coefficient::Coefficient;
 pub use ising::{InexactScale, Ising};
 pub use qubo::Qubo;
-pub use sampler::{Exhaustive, Sample, Sampler, SimulatedAnnealing, TooManyVariables};
+pub use sampler::{
+    AnnealingStats, Exhaustive, ExhaustiveStats, InvalidSchedule, Run, Sample, SampleError,
+    Sampler, Schedule, SimulatedAnnealing, Status, Unlimited,
+};
+pub use search_core::Budget;
 
 /// Doctests for the code examples in README.md (not part of the API).
 #[cfg(doctest)]

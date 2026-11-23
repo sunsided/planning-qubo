@@ -1,89 +1,179 @@
 //! The exhaustive sampler: the exact baseline for small models.
 
-use alloc::vec;
 use alloc::vec::Vec;
-use core::fmt;
+
+use search_core::Budget;
 
 use super::adjacency::Adjacency;
-use crate::{Coefficient, Qubo, Sample, Sampler};
+use crate::{Coefficient, Qubo, Run, Sample, SampleError, Sampler, Status};
 
 /// Tries every assignment and returns one with the lowest energy.
 ///
 /// The enumeration is in Gray code order, so each step flips one bit and costs one flip
 /// delta. Among equal energies, the first one in that order wins, so the result is
-/// deterministic. The work is `2ⁿ` flips, so models are limited to
+/// deterministic. The work is `2ⁿ` assignments, so models are limited to
 /// [`Exhaustive::MAX_VARIABLES`] variables.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Exhaustive;
-
-impl Exhaustive {
-    /// The largest number of variables that the sampler accepts.
-    pub const MAX_VARIABLES: usize = 30;
+///
+/// The unit of work is one evaluated assignment ([`ExhaustiveStats::evaluated`]). A run
+/// that the budget stops resumes at the next assignment. For [`f64`], the comparison uses
+/// a running energy sum, so near-ties can resolve differently than with exact sums.
+#[derive(Debug, Clone)]
+pub struct Exhaustive<T> {
+    /// The model copy of the current run.
+    adjacency: Adjacency<T>,
+    /// The assignment at Gray code step `next − 1`. Same length as the model.
+    current: Vec<bool>,
+    /// The running energy of `current`.
+    energy: T,
+    /// The number of assignments that the run has evaluated: the next Gray code step.
+    next: u64,
+    /// The Gray code step of the best assignment so far.
+    best_step: u64,
+    /// The energy of the best assignment so far. Equal to the offset while `next == 0`.
+    best_energy: T,
+    /// The best assignment, written from `best_step` when a call returns.
+    best: Vec<bool>,
+    /// `false` until the first [`Sampler::sample`] call.
+    started: bool,
 }
 
-/// The error when a model has more than [`Exhaustive::MAX_VARIABLES`] variables.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TooManyVariables {
-    /// The number of variables of the model.
-    pub variables: usize,
+/// The work counters of one [`Exhaustive`] call.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ExhaustiveStats {
+    /// The number of assignments that the call evaluated.
+    pub evaluated: u64,
 }
 
-impl fmt::Display for TooManyVariables {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "the model has {} variables; exhaustive sampling accepts at most {}",
-            self.variables,
-            Exhaustive::MAX_VARIABLES
-        )
+impl<T: Coefficient> Default for Exhaustive<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl core::error::Error for TooManyVariables {}
+impl<T: Coefficient> Exhaustive<T> {
+    /// The largest number of variables that the sampler accepts.
+    pub const MAX_VARIABLES: usize = 30;
 
-impl<T: Coefficient> Sampler<Qubo<T>> for Exhaustive {
-    type Sample = Sample<T>;
-    type Error = TooManyVariables;
+    /// Creates a sampler with an empty workspace.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            adjacency: Adjacency::new(),
+            current: Vec::new(),
+            energy: T::ZERO,
+            next: 0,
+            best_step: 0,
+            best_energy: T::ZERO,
+            best: Vec::new(),
+            started: false,
+        }
+    }
 
-    fn sample(&mut self, model: &Qubo<T>) -> Result<Sample<T>, TooManyVariables> {
+    /// Resets the workspace for a new run on `model`. Reuses the buffers.
+    fn start(&mut self, model: &Qubo<T>) {
+        self.adjacency.rebuild(model);
+        self.current.clear();
+        self.current.resize(model.num_variables(), false);
+        self.energy = model.offset();
+        self.next = 0;
+        self.best_step = 0;
+        self.best_energy = model.offset();
+        self.started = true;
+    }
+
+    /// Evaluates assignments until all are done or `budget` is exhausted.
+    fn run<B: Budget<ExhaustiveStats>>(
+        &mut self,
+        mut budget: B,
+    ) -> Run<Sample<'_, T>, ExhaustiveStats> {
+        let total = 1_u64 << self.adjacency.len();
+        let mut stats = ExhaustiveStats::default();
+
+        while self.next < total {
+            if budget.exhausted(&stats) {
+                return self.result(Status::OutOfBudget, stats);
+            }
+
+            self.evaluate_next();
+            stats.evaluated += 1;
+        }
+
+        self.result(Status::Finished, stats)
+    }
+
+    /// Evaluates Gray code step `next`: flips one bit (none for step 0) and keeps a new best.
+    fn evaluate_next(&mut self) {
+        let step = self.next;
+
+        if step > 0 {
+            let i = bit_to_flip(step);
+            self.energy = self
+                .energy
+                .plus(self.adjacency.flip_delta(i, &self.current));
+            self.current[i] = !self.current[i];
+        }
+
+        if step == 0 || self.energy < self.best_energy {
+            self.best_energy = self.energy;
+            self.best_step = step;
+        }
+
+        self.next += 1;
+    }
+
+    /// Writes the best assignment into the workspace and borrows it.
+    fn result(
+        &mut self,
+        status: Status,
+        work: ExhaustiveStats,
+    ) -> Run<Sample<'_, T>, ExhaustiveStats> {
+        write_gray_code_bits(self.best_step, &mut self.best, self.adjacency.len());
+
+        Run {
+            sample: Sample {
+                bits: &self.best,
+                energy: self.adjacency.energy(&self.best),
+            },
+            status,
+            stats: work,
+        }
+    }
+}
+
+impl<T: Coefficient> Sampler<Qubo<T>> for Exhaustive<T> {
+    type Stats = ExhaustiveStats;
+    type Sample<'a> = Sample<'a, T>;
+    type Error = SampleError;
+
+    fn sample<B: Budget<ExhaustiveStats>>(
+        &mut self,
+        model: &Qubo<T>,
+        budget: B,
+    ) -> Result<Run<Sample<'_, T>, ExhaustiveStats>, SampleError> {
         let variables = model.num_variables();
 
         if variables > Self::MAX_VARIABLES {
-            return Err(TooManyVariables { variables });
+            return Err(SampleError::TooManyVariables {
+                variables,
+                max: Self::MAX_VARIABLES,
+            });
         }
 
-        let mut adjacency = Adjacency::default();
-        adjacency.rebuild(model, |v| v);
+        self.start(model);
 
-        let bits = gray_code_minimum(&adjacency, model.offset());
-        let energy = model.energy(&bits);
-
-        Ok(Sample { bits, energy })
+        Ok(self.run(budget))
     }
-}
 
-/// Walks all assignments in Gray code order and returns the first one with the lowest energy.
-///
-/// Needs at most [`Exhaustive::MAX_VARIABLES`] variables, so the step count fits a `u64`.
-fn gray_code_minimum<T: Coefficient>(adjacency: &Adjacency<T>, offset: T) -> Vec<bool> {
-    let n = adjacency.len();
-    let mut x = vec![false; n];
-    let mut energy = offset;
-    let mut best_energy = offset;
-    let mut best_step = 0_u64;
-
-    for step in 1..1_u64 << n {
-        let i = bit_to_flip(step);
-        energy = energy.plus(adjacency.flip_delta(i, &x));
-        x[i] = !x[i];
-
-        if energy < best_energy {
-            best_energy = energy;
-            best_step = step;
+    fn resume<B: Budget<ExhaustiveStats>>(
+        &mut self,
+        budget: B,
+    ) -> Result<Run<Sample<'_, T>, ExhaustiveStats>, SampleError> {
+        if !self.started {
+            return Err(SampleError::NothingToResume);
         }
-    }
 
-    gray_code_bits(best_step, n)
+        Ok(self.run(budget))
+    }
 }
 
 /// The bit that Gray code step `step` flips: the index of the lowest set bit of `step`.
@@ -91,18 +181,20 @@ fn bit_to_flip(step: u64) -> usize {
     usize::try_from(step.trailing_zeros()).expect("a u64 has at most 64 trailing zeros")
 }
 
-/// The assignment after `step` Gray code steps: the bits of `step ^ (step >> 1)`.
-fn gray_code_bits(step: u64, n: usize) -> Vec<bool> {
+/// Writes the assignment after `step` Gray code steps into `bits`: the bits of `step ^ (step >> 1)`.
+///
+/// Reuses the capacity of `bits`, so a buffer with capacity `n` does not allocate.
+fn write_gray_code_bits(step: u64, bits: &mut Vec<bool>, n: usize) {
     let code = step ^ (step >> 1);
-
-    (0..n).map(|i| code >> i & 1 == 1).collect()
+    bits.clear();
+    bits.extend((0..n).map(|i| code >> i & 1 == 1));
 }
 
 /// Unit tests for the exhaustive sampler.
 #[cfg(test)]
 mod tests {
-    use super::{Exhaustive, TooManyVariables};
-    use crate::{Qubo, Sampler};
+    use super::{Exhaustive, ExhaustiveStats};
+    use crate::{Qubo, SampleError, Sampler, Status, Unlimited};
 
     /// The sampler finds the ground state and reports its energy.
     #[test]
@@ -112,10 +204,15 @@ mod tests {
         qubo.add_linear(1, -3);
         qubo.add_quadratic(0, 1, 5);
 
-        let sample = Exhaustive.sample(&qubo).expect("two variables are allowed");
+        let mut sampler = Exhaustive::new();
+        let run = sampler
+            .sample(&qubo, Unlimited)
+            .expect("two variables are allowed");
 
-        assert_eq!(sample.bits, [false, true]);
-        assert_eq!(sample.energy, -3);
+        assert_eq!(run.sample.bits, [false, true]);
+        assert_eq!(run.sample.energy, -3);
+        assert_eq!(run.status, Status::Finished);
+        assert_eq!(run.stats, ExhaustiveStats { evaluated: 4 });
     }
 
     /// An empty model has one assignment with the offset as its energy.
@@ -124,24 +221,38 @@ mod tests {
         let mut qubo = Qubo::<f64>::new(0);
         qubo.add_offset(1.5);
 
-        let sample = Exhaustive
-            .sample(&qubo)
+        let mut sampler = Exhaustive::new();
+        let run = sampler
+            .sample(&qubo, Unlimited)
             .expect("zero variables are allowed");
 
-        assert_eq!(sample.bits, [false; 0]);
-        assert!((sample.energy - 1.5).abs() < f64::EPSILON);
+        assert_eq!(run.sample.bits, [false; 0]);
+        assert!((run.sample.energy - 1.5).abs() < f64::EPSILON);
     }
 
     /// Too many variables is an error, not a long wait.
     #[test]
     fn rejects_large_models() {
-        let qubo = Qubo::<i64>::new(Exhaustive::MAX_VARIABLES + 1);
+        let variables = Exhaustive::<i64>::MAX_VARIABLES + 1;
+        let qubo = Qubo::<i64>::new(variables);
 
         assert_eq!(
-            Exhaustive.sample(&qubo),
-            Err(TooManyVariables {
-                variables: Exhaustive::MAX_VARIABLES + 1
+            Exhaustive::new().sample(&qubo, Unlimited).err(),
+            Some(SampleError::TooManyVariables {
+                variables,
+                max: Exhaustive::<i64>::MAX_VARIABLES
             })
+        );
+    }
+
+    /// Resume needs a run.
+    #[test]
+    fn resume_needs_a_run() {
+        let mut sampler = Exhaustive::<i64>::new();
+
+        assert_eq!(
+            sampler.resume(Unlimited).err(),
+            Some(SampleError::NothingToResume)
         );
     }
 }
