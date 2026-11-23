@@ -1,0 +1,35 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0](https://github.com/sunsided/planning-qubo/releases/tag/v0.1.0) - 2026-11-23
+
+### Added
+
+- Add a "Who this is for" section to the README
+- Add reusable workspaces, budgets and resume to the samplers
+- Add QUBO and Ising models, penalty builder and samplers
+- Add dormant release automation with release-plz
+- Add CONTRIBUTING.md
+- Add git hooks and Copilot review instructions
+- Add README badges, a usage example and package excludes
+- Add REUSE licensing metadata
+- Add supply-chain checks
+- Add Codecov configuration
+- Add Taskfile and CI workflows
+
+### Changed
+
+- Report the variable limit in SampleError::TooManyVariables
+- Set the version to 0.1.0
+- Document the overflow bound of the conversion test generator
+- Document the alloc and dependency rules for the new modules
+- Test the Sampler trait through minimal samplers
+- Tighten lints and forbid unsafe code
+- Render mermaid diagrams on docs.rs and doctest the README
+- Reserve the crate name with a 0.0.0 placeholder
