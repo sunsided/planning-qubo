@@ -29,8 +29,11 @@ exclude = [
 libm = "0.2.16"
 # The RNG trait that the simulated annealing sampler takes, so callers pick a seedable RNG.
 rand_core = { version = "0.10.1", default-features = false }
+# The Budget trait shared by the planning crates, for time-sliced sampling.
+search-core = { version = "0.3.1", default-features = false }
 
 [dev-dependencies]
+allocation-counter = "0.8.1"
 proptest = "1.12.0"
 rand_pcg = "0.10.3"
 

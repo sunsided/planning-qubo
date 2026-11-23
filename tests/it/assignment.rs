@@ -1,7 +1,7 @@
 //! The assignment encoding: ground states decode to feasible optima, checked by brute force.
 
 use planning_qubo::assignment::{self, Encoding};
-use planning_qubo::{Exhaustive, Sample, Sampler, SimulatedAnnealing};
+use planning_qubo::{Exhaustive, Sample, Sampler, Schedule, SimulatedAnnealing, Unlimited};
 use proptest::prelude::*;
 use rand_core::SeedableRng;
 use rand_pcg::Pcg64Mcg;
@@ -73,10 +73,10 @@ fn encode((costs, capacities): &Instance) -> Encoding<i64> {
 fn assert_optimal(
     encoding: &Encoding<i64>,
     capacities: &[u32],
-    sample: &Sample<i64>,
+    sample: Sample<'_, i64>,
     optimum: i64,
 ) {
-    let decoded = encoding.decode(&sample.bits);
+    let decoded = encoding.decode(sample.bits);
 
     assert!(
         decoded.is_feasible(),
@@ -86,10 +86,7 @@ fn assert_optimal(
     let map: Option<Vec<usize>> = decoded.agents.iter().copied().collect();
     assert!(map.is_some_and(|map| fits(&map, capacities)));
     assert_eq!(decoded.cost, optimum);
-    assert_eq!(
-        sample.energy,
-        encoding.problem().qubo().energy(&sample.bits)
-    );
+    assert_eq!(sample.energy, encoding.problem().qubo().energy(sample.bits));
 }
 
 proptest! {
@@ -98,26 +95,32 @@ proptest! {
     #[test]
     fn exhaustive_ground_state_is_a_feasible_optimum(instance in instance()) {
         let encoding = encode(&instance);
-        let sample = Exhaustive.sample(encoding.problem().qubo()).expect("few variables");
+        let mut sampler = Exhaustive::new();
+        let run = sampler
+            .sample(encoding.problem().qubo(), Unlimited)
+            .expect("few variables");
 
         match brute_force_optimum(&instance.0, &instance.1) {
-            Some(optimum) => assert_optimal(&encoding, &instance.1, &sample, optimum),
-            None => prop_assert!(!encoding.decode(&sample.bits).is_feasible()),
+            Some(optimum) => assert_optimal(&encoding, &instance.1, run.sample, optimum),
+            None => prop_assert!(!encoding.decode(run.sample.bits).is_feasible()),
         }
     }
 }
 
-/// The best of a few annealing draws, with a fixed seed.
-fn best_annealed(encoding: &Encoding<i64>, seed: u64) -> Sample<i64> {
-    let mut sampler = SimulatedAnnealing::new(Pcg64Mcg::seed_from_u64(seed), 1_000);
+/// The best of a few annealing draws with a fixed seed, as `(energy, bits)`.
+fn best_annealed(encoding: &Encoding<i64>, seed: u64) -> (i64, Vec<bool>) {
+    let rng = Pcg64Mcg::seed_from_u64(seed);
+    let mut sampler = SimulatedAnnealing::new(rng, Schedule::from_model(1_000));
     let qubo = encoding.problem().qubo();
 
     (0..10)
         .map(|_| {
-            let Ok(sample) = sampler.sample(qubo);
-            sample
+            let run = sampler
+                .sample(qubo, Unlimited)
+                .expect("annealing accepts any model");
+            (run.sample.energy, run.sample.bits.to_vec())
         })
-        .min_by_key(|sample| sample.energy)
+        .min()
         .expect("ten draws")
 }
 
@@ -143,12 +146,13 @@ fn annealing_finds_the_optimum() {
         let encoding = encode(instance);
         let optimum = brute_force_optimum(&instance.0, &instance.1).expect("feasible");
 
-        assert_optimal(
-            &encoding,
-            &instance.1,
-            &best_annealed(&encoding, seed),
-            optimum,
-        );
+        let (energy, bits) = best_annealed(&encoding, seed);
+        let sample = Sample {
+            bits: &bits,
+            energy,
+        };
+
+        assert_optimal(&encoding, &instance.1, sample, optimum);
     }
 }
 

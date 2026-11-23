@@ -33,7 +33,7 @@ penalty `P·(1 − x₀ − x₁ − x₂)²`; with `P` above the total cost, ev
 feasible.
 
 ```rust
-use planning_qubo::{Builder, Exhaustive, Sampler};
+use planning_qubo::{Builder, Exhaustive, Sampler, Unlimited};
 
 let mut builder = Builder::<i64>::new();
 let slots = ["early", "noon", "late"].map(|name| builder.variable(name));
@@ -45,24 +45,30 @@ for (&slot, cost) in slots.iter().zip([3, 1, 2]) {
 builder.exactly_one("one slot", &slots, 7);
 let problem = builder.build();
 
-let sample = Exhaustive.sample(problem.qubo())?;
+let mut sampler = Exhaustive::new();
+let sample = sampler.sample(problem.qubo(), Unlimited)?.sample;
 
 assert_eq!(sample.bits, [false, true, false]);
 assert_eq!(sample.energy, 1);
-assert_eq!(problem.violations(&sample.bits).count(), 0);
+assert_eq!(problem.violations(sample.bits).count(), 0);
 
 // The same model as an Ising model: i64 energies are scaled by 4 to stay exact.
 let ising = problem.qubo().to_ising();
-assert_eq!(ising.energy(&sample.bits), 4 * sample.energy);
-# Ok::<(), planning_qubo::TooManyVariables>(())
+assert_eq!(ising.energy(sample.bits), 4 * sample.energy);
+# Ok::<(), planning_qubo::SampleError>(())
 ```
 
 The `assignment` module encodes the assignment of tasks to agents with capacities, and
 decodes a sample into the agent of each task plus the names of the violated constraints.
-`SimulatedAnnealing` samples larger models from any seedable `rand_core` RNG.
+`SimulatedAnnealing` samples larger models from any seedable `rand_core` RNG, on a
+schedule that it derives from the model or that you set.
+
+Each sampler owns a reusable workspace: a warm call allocates nothing, and the result
+borrows the best state from the workspace. A `search_core::Budget` over the sampler's work
+counters stops a run early, with the best state so far; `resume` continues it.
 
 Models store coefficients as `i64` (exact, overflow is checked) or `f64`. The crate is
-`no_std` with `alloc`, and depends on `libm` and `rand_core` only.
+`no_std` with `alloc`, and depends on `libm`, `rand_core` and `search-core` only.
 
 ## Minimum supported Rust version
 

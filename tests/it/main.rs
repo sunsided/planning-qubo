@@ -1,6 +1,8 @@
 //! Integration tests: model conversions, the assignment encoding and the samplers.
 
+mod allocations;
 mod assignment;
+mod budget;
 mod conversion;
 
 use planning_qubo::{Ising, Problem, Qubo, assignment::Encoding};
