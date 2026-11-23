@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/sunsided/planning-qubo/compare/v0.1.0...v0.2.0) - 2026-11-23
+
+### Changed
+
+- Use the Status and Unlimited types from search-core 0.3.2 ([#5](https://github.com/sunsided/planning-qubo/pull/5))
+- Use the Status and Unlimited types from search-core 0.3.2
+
 ## [0.1.0](https://github.com/sunsided/planning-qubo/releases/tag/v0.1.0) - 2026-11-23
 
 ### Added
