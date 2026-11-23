@@ -25,6 +25,14 @@ exclude = [
 ]
 
 [dependencies]
+# exp for the annealing acceptance test; core has no float math in no_std.
+libm = "0.2.16"
+# The RNG trait that the simulated annealing sampler takes, so callers pick a seedable RNG.
+rand_core = { version = "0.10.1", default-features = false }
+
+[dev-dependencies]
+proptest = "1.12.0"
+rand_pcg = "0.10.3"
 
 [package.metadata.docs.rs]
 all-features = true
