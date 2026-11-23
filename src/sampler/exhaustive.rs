@@ -153,7 +153,10 @@ impl<T: Coefficient> Sampler<Qubo<T>> for Exhaustive<T> {
         let variables = model.num_variables();
 
         if variables > Self::MAX_VARIABLES {
-            return Err(SampleError::TooManyVariables { variables });
+            return Err(SampleError::TooManyVariables {
+                variables,
+                max: Self::MAX_VARIABLES,
+            });
         }
 
         self.start(model);
@@ -235,7 +238,10 @@ mod tests {
 
         assert_eq!(
             Exhaustive::new().sample(&qubo, Unlimited).err(),
-            Some(SampleError::TooManyVariables { variables })
+            Some(SampleError::TooManyVariables {
+                variables,
+                max: Exhaustive::<i64>::MAX_VARIABLES
+            })
         );
     }
 

@@ -124,10 +124,13 @@ impl<T> Budget<T> for Unlimited {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SampleError {
-    /// The model has more variables than [`Exhaustive::MAX_VARIABLES`].
+    /// The model has more variables than the sampler accepts, for example
+    /// [`Exhaustive::MAX_VARIABLES`].
     TooManyVariables {
         /// The number of variables of the model.
         variables: usize,
+        /// The largest number of variables that the sampler accepts.
+        max: usize,
     },
     /// [`Sampler::resume`] was called before any [`Sampler::sample`] call.
     NothingToResume,
@@ -136,10 +139,9 @@ pub enum SampleError {
 impl fmt::Display for SampleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TooManyVariables { variables } => write!(
+            Self::TooManyVariables { variables, max } => write!(
                 f,
-                "the model has {variables} variables; exhaustive sampling accepts at most {}",
-                Exhaustive::<i64>::MAX_VARIABLES
+                "the model has {variables} variables; the sampler accepts at most {max}"
             ),
             Self::NothingToResume => f.write_str("there is no run to resume"),
         }
