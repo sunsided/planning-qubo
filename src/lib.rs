@@ -1,6 +1,6 @@
 //! # Planning QUBO
 //!
-//! Planning, scheduling and constraint problems as QUBO and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers and QAOA.
+//! Planning, scheduling and constraint problems as QUBO (quadratic unconstrained binary optimization) and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers and QAOA (quantum approximate optimization algorithm).
 //!
 //! ## Scope
 //!
