@@ -9,6 +9,9 @@ use crate::assignments;
 const MAX_VARIABLES: usize = 12;
 
 /// The largest coefficient magnitude. Small enough that 4× sums cannot overflow `i64`.
+///
+/// Bound: one coefficient collects at most 40 terms × 1000, and the conversions multiply
+/// by at most 4, so intermediate values stay below about 1.6e5.
 const MAX_MAGNITUDE: i64 = 1_000;
 
 /// Terms `(i, j, value)` over `n` variables, plus an offset. `i == j` is a linear term.
