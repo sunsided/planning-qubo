@@ -65,9 +65,9 @@ pub use ising::{InexactScale, Ising};
 pub use qubo::Qubo;
 pub use sampler::{
     AnnealingStats, Exhaustive, ExhaustiveStats, InvalidSchedule, Run, Sample, SampleError,
-    Sampler, Schedule, SimulatedAnnealing, Status, Unlimited,
+    Sampler, Schedule, SimulatedAnnealing,
 };
-pub use search_core::Budget;
+pub use search_core::{Budget, Status, Unlimited};
 
 /// Doctests for the code examples in README.md (not part of the API).
 #[cfg(doctest)]

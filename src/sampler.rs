@@ -26,7 +26,7 @@ use core::fmt;
 
 pub use annealing::{AnnealingStats, InvalidSchedule, Schedule, SimulatedAnnealing};
 pub use exhaustive::{Exhaustive, ExhaustiveStats};
-use search_core::Budget;
+use search_core::{Budget, Status};
 
 /// A source of low-energy samples for a model, classical or quantum.
 ///
@@ -37,7 +37,8 @@ use search_core::Budget;
 /// has no units of work, so its runs finish without a budget check.
 ///
 /// The budget is taken by value, as in the other planning crates. Pass `&mut budget` for a
-/// closure that must keep its state across calls; [`Unlimited`] runs to the end.
+/// closure that must keep its state across calls; [`Unlimited`](search_core::Unlimited) runs
+/// to the end.
 pub trait Sampler<Model> {
     /// The work counters of one call, which the budget sees.
     type Stats;
@@ -84,19 +85,12 @@ pub trait Sampler<Model> {
 pub struct Run<S, Stats> {
     /// The best state of the run so far.
     pub sample: S,
-    /// Whether the run finished or the budget stopped it.
+    /// Whether the run finished or the budget stopped it. With [`Status::Finished`] from
+    /// [`Exhaustive`], the sample is a ground state; after [`Status::OutOfBudget`],
+    /// [`Sampler::resume`] continues the run.
     pub status: Status,
     /// The work that this call did. Each call starts from zero.
     pub stats: Stats,
-}
-
-/// How a call ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Status {
-    /// The run did all its work. For [`Exhaustive`], the sample is a ground state.
-    Finished,
-    /// The budget stopped the run. [`Sampler::resume`] continues it.
-    OutOfBudget,
 }
 
 /// An assignment of a QUBO model's variables and its energy, borrowed from a sampler.
@@ -108,16 +102,6 @@ pub struct Sample<'a, T> {
     pub bits: &'a [bool],
     /// The energy of `bits` under the model. Exact for [`i64`].
     pub energy: T,
-}
-
-/// A budget that is never exhausted: the run goes until it finishes.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Unlimited;
-
-impl<T> Budget<T> for Unlimited {
-    fn exhausted(&mut self, _stats: &T) -> bool {
-        false
-    }
 }
 
 /// The error when a sampler cannot handle a model or a call.
