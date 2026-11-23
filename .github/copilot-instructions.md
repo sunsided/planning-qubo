@@ -1,6 +1,6 @@
 # Repository instructions
 
-`planning-qubo` is a `no_std` Rust library that encodes planning, scheduling and
+`planning-qubo` is a `no_std` + `alloc` Rust library that encodes planning, scheduling and
 constraint problems as QUBO and Ising models, decodes samples back into plans, and samples
 them through the `Sampler` trait, with strict conventions. Path-specific rules
 live in `.github/instructions/*.instructions.md`.
