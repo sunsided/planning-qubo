@@ -155,3 +155,20 @@ fn same_name_variables_stay_separate() {
     assert_eq!(run.sample.energy, 0);
     assert!(decoded.values == [Some(0), Some(1)] || decoded.values == [Some(1), Some(0)]);
 }
+
+/// A constraint name used in two separate places is reported once.
+#[test]
+fn a_name_used_twice_is_reported_once() {
+    let mut csp = Csp::new();
+    let a = csp.add_variable("a", 1);
+    let b = csp.add_variable("b", 1);
+    let c = csp.add_variable("c", 1);
+    csp.all_different("same", &[a, b]);
+    csp.all_different("other", &[b, c]);
+    csp.all_different("same", &[a, c]);
+
+    let encoding = csp.encode(1_i64);
+    let decoded = encoding.decode(&[true, true, true]);
+
+    assert_eq!(decoded.violations, ["same", "other"]);
+}

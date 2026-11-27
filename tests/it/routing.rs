@@ -107,3 +107,22 @@ fn invalid_matrices_are_errors() {
         Some(RoutingError::ShapeMismatch { row: 1 })
     );
 }
+
+/// A city at two positions is no tour, whichever city it is and wherever it sits.
+#[test]
+fn a_repeated_city_is_never_a_tour() {
+    let distances = vec![vec![0_i64; 4]; 4];
+    let encoding = routing::encode(&distances, 10).expect("square");
+
+    for city in 1..4 {
+        let others: Vec<usize> = (1..4).filter(|&c| c != city).collect();
+
+        // `city` at positions 1 and 2, another city at 3.
+        let mut bits = vec![false; 9];
+        bits[encoding.variable(city, 1).index()] = true;
+        bits[encoding.variable(city, 2).index()] = true;
+        bits[encoding.variable(others[0], 3).index()] = true;
+
+        assert_eq!(encoding.decode(&bits).tour, None, "city {city}");
+    }
+}

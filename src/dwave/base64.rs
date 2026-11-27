@@ -18,6 +18,7 @@ pub(super) fn encode(bytes: &[u8]) -> String {
         ];
         let word = u32::from(b[0]) << 16 | u32::from(b[1]) << 8 | u32::from(b[2]);
 
+        // A chunk of n bytes holds 8n bits, so it fills n + 1 characters; `=` pads the rest.
         for k in 0..4 {
             if k <= chunk.len() {
                 out.push(char::from(ALPHABET[(word >> (18 - 6 * k) & 63) as usize]));

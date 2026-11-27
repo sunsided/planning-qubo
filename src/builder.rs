@@ -359,16 +359,21 @@ impl<T: Coefficient> Problem<T> {
 
     /// The names of the violated constraints, in the order they were added.
     ///
-    /// Encoders add some constraints as several pieces with one name, one after the other;
-    /// such a name appears once.
+    /// Encoders add some constraints as several pieces with one name; each name appears
+    /// once, at its first violated piece.
     ///
     /// # Panics
     ///
     /// Panics if `x.len()` is not the number of variables.
     #[must_use]
     pub fn violation_names(&self, x: &[bool]) -> Vec<String> {
-        let mut names: Vec<String> = self.violations(x).map(|c| c.name.clone()).collect();
-        names.dedup();
+        let mut names: Vec<String> = Vec::new();
+
+        for constraint in self.violations(x) {
+            if !names.contains(&constraint.name) {
+                names.push(constraint.name.clone());
+            }
+        }
 
         names
     }

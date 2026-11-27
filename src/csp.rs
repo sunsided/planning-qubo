@@ -3,7 +3,10 @@
 //! A [`Csp`] has named variables, each with the values `0..domain`, and named binary
 //! constraints, each a relation that allows some value pairs of two variables. The encoding
 //! is one-hot: one QUBO variable `{name}={value}` per variable and value, which is 1 when
-//! the variable takes the value. The constraints are:
+//! the variable takes the value. Give variables distinct names if you look QUBO variables
+//! up by name ([`Problem::variable`] finds the first of a name); the encoding and
+//! [`Encoding::variable`] work by index and stay correct for repeated names. The
+//! constraints are:
 //!
 //! - `{name}.exactly_one`: the variable takes exactly one value, with the penalty
 //!   `P·(1 − Σ xᵥ)²`;
