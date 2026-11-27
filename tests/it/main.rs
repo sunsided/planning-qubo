@@ -4,6 +4,7 @@ mod allocations;
 mod assignment;
 mod budget;
 mod conversion;
+mod csp;
 #[cfg(feature = "parallel")]
 mod parallel;
 mod penalty;

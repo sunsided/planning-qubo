@@ -355,6 +355,22 @@ impl<T: Coefficient> Problem<T> {
 
         self.constraints.iter().filter(|c| !c.is_satisfied(x))
     }
+
+    /// The names of the violated constraints, in the order they were added.
+    ///
+    /// Encoders add some constraints as several pieces with one name, one after the other;
+    /// such a name appears once.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `x.len()` is not the number of variables.
+    #[must_use]
+    pub fn violation_names(&self, x: &[bool]) -> Vec<String> {
+        let mut names: Vec<String> = self.violations(x).map(|c| c.name.clone()).collect();
+        names.dedup();
+
+        names
+    }
 }
 
 /// Unit tests for the penalty terms of each constraint type.
