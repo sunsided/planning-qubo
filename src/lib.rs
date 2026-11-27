@@ -1,6 +1,6 @@
 //! # Planning QUBO
 //!
-//! Planning, scheduling and constraint problems as QUBO and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers and QAOA.
+//! Planning, scheduling and constraint problems as QUBO and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers.
 //!
 //! ## Scope
 //!
@@ -8,7 +8,7 @@
 //! - Encoders for constraint satisfaction, time-indexed scheduling, assignment and allocation, time-expanded multi-agent path finding and routing
 //! - Decoders that map samples back to plans and report violated constraints, plus penalty-weight tuning
 //! - A sampler interface with classical baselines (exhaustive, simulated annealing, tabu search, parallel tempering)
-//! - Export to annealer formats and adapters for quantum frameworks
+//! - Export to D-Wave's Solver API; QAOA on these models is planned in quantum-planning
 //!
 //! Available now:
 //!
