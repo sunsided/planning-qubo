@@ -302,3 +302,35 @@ fn mismatches_are_errors() {
         Err(ParseError::Malformed { field: "solutions" })
     );
 }
+
+/// An answer to the scaled Ising export parses back to the QUBO's energies, offset included.
+#[test]
+fn ising_answer_energies_match_the_qubo() {
+    let qubo = model();
+    let exported = dwave::export_ising(&qubo.to_ising(), &solver(), &MAP).expect("valid map");
+    let solutions = [[true, false, true], [false, true, true]];
+
+    // SAPI energies exclude the offset of 5.25: E(x) − 5.25 for each solution.
+    #[expect(clippy::cast_precision_loss, reason = "small energies")]
+    let energies: Vec<u8> = solutions
+        .iter()
+        .flat_map(|x| (qubo.energy(x) as f64 - 5.25).to_le_bytes())
+        .collect();
+    let energy_text = base64(&energies);
+    let answer = QpAnswer {
+        active_variables: "AwAAAAEAAAACAAAA",
+        solutions: "oGA=",
+        energies: &energy_text,
+        num_occurrences: None,
+    };
+
+    let samples = exported.parse_answer(&answer).expect("matching answer");
+
+    for (sample, x) in samples.iter().zip(&solutions) {
+        assert_eq!(&sample.bits, x);
+
+        #[expect(clippy::cast_precision_loss, reason = "small energies")]
+        let recomputed = qubo.energy(x) as f64;
+        assert!((sample.energy - recomputed).abs() < 1e-12);
+    }
+}
