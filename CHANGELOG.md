@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/sunsided/planning-qubo/compare/v0.2.0...v0.2.1) - 2026-11-27
+
+### Added
+
+- Add the pipeline diagram to the README and the crate docs
+- Add examples on realistic instances
+- Add property tests for SAPI export, base64 and the samplers
+- Add D-Wave SAPI export and sample-set parsing
+- Add the routing (tour) encoder and decoder
+- Add the time-expanded MAPF encoder and decoder
+- Add the time-indexed scheduling encoder and decoder
+- Add the CSP encoder and decoder
+- Add penalty weights chosen from the model
+- Add the parallel feature with sample_parallel and resume_parallel
+- Add tabu search and parallel tempering samplers
+
+### Changed
+
+- Update the README audience to the current crate
+- Bound the bakery brute force by the horizon as the encoder does
+- Report each violated constraint name once
+- Test parsing an answer to the scaled Ising export
+- Spell out QUBO and QAOA on first use in the README
+
+### Fixed
+
+- Fix variable collisions in the CSP and MAPF encoders
+
 ## [0.2.0](https://github.com/sunsided/planning-qubo/compare/v0.1.0...v0.2.0) - 2026-11-23
 
 ### Changed
