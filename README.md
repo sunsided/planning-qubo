@@ -83,6 +83,9 @@ assert_eq!(ising.energy(sample.bits), 4 * sample.energy);
 
 The `assignment` module encodes the assignment of tasks to agents with capacities, and
 decodes a sample into the agent of each task plus the names of the violated constraints.
+`penalty::safe` picks a penalty weight from the objective that makes every ground state a
+feasible optimum, and `penalty::tune` doubles a small weight until a given sampler returns
+feasible samples. Both take any encoder as a closure from the weight to an encoding.
 `SimulatedAnnealing`, `TabuSearch` and `ParallelTempering` sample larger models from any
 seedable `rand_core` RNG. Annealing and tempering use a schedule that they derive from the
 model or that you set.

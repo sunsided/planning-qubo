@@ -6,6 +6,7 @@ mod budget;
 mod conversion;
 #[cfg(feature = "parallel")]
 mod parallel;
+mod penalty;
 
 use planning_qubo::{Ising, Problem, Qubo, assignment::Encoding};
 

@@ -282,6 +282,21 @@ fn slack_weights(max: u32) -> impl Iterator<Item = u32> {
     })
 }
 
+/// An encoded problem: anything that holds a [`Problem`], such as an encoder's encoding.
+///
+/// The [`penalty`](crate::penalty) functions use it to read the model and to check samples
+/// against the constraints, for every encoder.
+pub trait Encoded<T> {
+    /// The QUBO problem with its constraints.
+    fn problem(&self) -> &Problem<T>;
+}
+
+impl<T> Encoded<T> for Problem<T> {
+    fn problem(&self) -> &Problem<T> {
+        self
+    }
+}
+
 /// A QUBO model built by a [`Builder`], with its variable names and constraints.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Problem<T> {
