@@ -9,6 +9,7 @@ mod mapf;
 #[cfg(feature = "parallel")]
 mod parallel;
 mod penalty;
+mod routing;
 mod scheduling;
 
 use planning_qubo::{Ising, Problem, Qubo, assignment::Encoding};
