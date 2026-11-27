@@ -58,6 +58,13 @@ tasks:
       - cmd: cargo test --workspace --all-features --doc
         if: '[ "{{.HAS_LIB}}" = "yes" ]'
 
+  examples:
+    desc: Run every example in release mode (the parallel one with its feature)
+    cmds:
+      - for: [delivery_tour, exam_timetable, bakery_ovens, warehouse_robots, sampler_shootout, dwave_map_colouring]
+        cmd: cargo run --release --example {{.ITEM}}
+      - cargo run --release --features parallel --example parallel_restarts
+
   fmt:
     desc: Format all Rust sources
     cmds:
