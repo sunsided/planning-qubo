@@ -25,14 +25,15 @@
 //! ## Pipeline
 //!
 //! ```mermaid
-//! graph LR
-//!     problem[Planning problem] -->|encode| builder[Builder]
-//!     builder -->|build| encoded[Problem: QUBO + constraints]
-//!     encoded -->|Sampler| sample[Sample]
-//!     sample -->|decode| plan[Plan + violations]
-//!     encoded -.->|to_ising| ising[Ising]
-//!     encoded -.->|dwave export| qpu[(D-Wave QPU)]
-//!     qpu -.->|parse_answer| sample
+//! flowchart LR
+//!     problem["Planning problem<br/>(tasks, CSP, jobs, agents, tour)"] -->|encode| model["Problem<br/>QUBO + named constraints"]
+//!     builder[Builder] -->|build| model
+//!     penalty[penalty::safe / tune] -.->|weight P| model
+//!     model --> samplers["Samplers<br/>exhaustive, annealing,<br/>tabu, tempering"]
+//!     model -->|dwave export| qpu[(D-Wave QPU)]
+//!     samplers --> sample[Sample]
+//!     qpu -->|parse_answer| sample
+//!     sample -->|decode| plan["Plan + violated constraints"]
 //! ```
 //!
 //! ## Example

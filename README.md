@@ -47,6 +47,21 @@ planned in
 - A sampler interface with classical baselines (exhaustive, simulated annealing, tabu search, parallel tempering)
 - Export to D-Wave's Solver API; QAOA on these models is planned in quantum-planning
 
+An encoder or the builder produces the model; local samplers and an annealer are
+interchangeable sources of samples, and the same decoder turns either into a plan:
+
+```mermaid
+flowchart LR
+    problem["Planning problem<br/>(tasks, CSP, jobs, agents, tour)"] -->|encode| model["Problem<br/>QUBO + named constraints"]
+    builder[Builder] -->|build| model
+    penalty[penalty::safe / tune] -.->|weight P| model
+    model --> samplers["Samplers<br/>exhaustive, annealing,<br/>tabu, tempering"]
+    model -->|dwave export| qpu[(D-Wave QPU)]
+    samplers --> sample[Sample]
+    qpu -->|parse_answer| sample
+    sample -->|decode| plan["Plan + violated constraints"]
+```
+
 Encodings fit classical solvers as well as annealers and, later, QAOA, so the crate is useful with or without quantum hardware. The problems come from the planning crates: [constraint-search](https://github.com/sunsided/constraint-search), [temporal-control](https://github.com/sunsided/temporal-control), [resource-timeline](https://github.com/sunsided/resource-timeline), [task-allocation](https://github.com/sunsided/task-allocation) and [mapf-search](https://github.com/sunsided/mapf-search).
 
 ## Usage
