@@ -173,12 +173,13 @@ fn next(starts: &mut [usize]) -> bool {
     false
 }
 
-/// Whether `starts` respects the windows, the oven count and the precedences.
+/// Whether `starts` respects the windows (deadline and horizon, as the encoder does), the
+/// oven count and the precedences.
 fn feasible(jobs: &[Job<i64>], starts: &[usize]) -> bool {
     let windows = jobs
         .iter()
         .zip(starts)
-        .all(|(job, &s)| s >= job.release && s + job.duration <= job.deadline);
+        .all(|(job, &s)| s >= job.release && s + job.duration <= job.deadline.min(HORIZON));
     let ovens = (0..HORIZON).all(|slot| {
         let baking = jobs
             .iter()
