@@ -12,7 +12,7 @@
 //!
 //! Available now: [`Qubo`] and [`Ising`] models with exact conversion in both directions,
 //! the penalty [`Builder`] with [`penalty`] weights chosen from the model (a safe bound, or
-//! tuned against a sampler), the [`assignment`], [`csp`] and [`scheduling`] encoders and
+//! tuned against a sampler), the [`assignment`], [`csp`], [`scheduling`] and [`mapf`] encoders and
 //! decoders, and the [`Exhaustive`],
 //! [`SimulatedAnnealing`], [`TabuSearch`] and [`ParallelTempering`] samplers. Samplers reuse their workspace, stop on a
 //! [`Budget`] and [`resume`](Sampler::resume) later.
@@ -63,6 +63,7 @@ mod builder;
 mod coefficient;
 pub mod csp;
 mod ising;
+pub mod mapf;
 #[cfg(feature = "parallel")]
 mod parallel;
 pub mod penalty;
