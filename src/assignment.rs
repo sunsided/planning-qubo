@@ -188,6 +188,12 @@ fn add_capacity<T: Coefficient>(
     builder.linear_equality(name, &terms, T::from_u32(capacity), capacity, penalty);
 }
 
+impl<T> crate::Encoded<T> for Encoding<T> {
+    fn problem(&self) -> &Problem<T> {
+        &self.problem
+    }
+}
+
 impl<T: Coefficient> Encoding<T> {
     /// The QUBO problem with its constraints.
     #[must_use]

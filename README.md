@@ -83,8 +83,25 @@ assert_eq!(ising.energy(sample.bits), 4 * sample.energy);
 
 The `assignment` module encodes the assignment of tasks to agents with capacities, and
 decodes a sample into the agent of each task plus the names of the violated constraints.
-`SimulatedAnnealing` samples larger models from any seedable `rand_core` RNG, on a
-schedule that it derives from the model or that you set.
+The `csp` module encodes constraint satisfaction problems over finite domains with binary
+constraints, one-hot, and decodes a sample into a value per variable and the violated
+constraints by name. The `scheduling` module encodes time-indexed scheduling (jobs with
+durations, release times, deadlines and precedences on a resource with a capacity) and
+decodes a sample into start times and the weighted completion time. The `mapf` module
+encodes multi-agent path finding over a time-expanded graph with move variables, so vertex
+and swap conflicts are both quadratic, and decodes a sample into one path per agent. The
+`routing` module encodes the shortest tour from a depot through all cities (asymmetric
+distances allowed) and decodes a sample into the tour and its length.
+
+The `dwave` module exports a QUBO or Ising model in the `qp` format of D-Wave's Solver API
+(SAPI), on a caller-given map from variables to solver qubits, and parses the returned
+sample sets back into assignments for the decoders. It does no networking.
+`penalty::safe` picks a penalty weight from the objective that makes every ground state a
+feasible optimum, and `penalty::tune` doubles a small weight until a given sampler returns
+feasible samples. Both take any encoder as a closure from the weight to an encoding.
+`SimulatedAnnealing`, `TabuSearch` and `ParallelTempering` sample larger models from any
+seedable `rand_core` RNG. Annealing and tempering use a schedule that they derive from the
+model or that you set.
 
 Each sampler owns a reusable workspace: a warm call allocates nothing, and the result
 borrows the best state from the workspace. A `search_core::Budget` over the sampler's work
@@ -92,6 +109,12 @@ counters stops a run early, with the best state so far; `resume` continues it.
 
 Models store coefficients as `i64` (exact, overflow is checked) or `f64`. The crate is
 `no_std` with `alloc`, and depends on `libm`, `rand_core` and `search-core` only.
+
+## Features
+
+- `parallel`: `sample_parallel` and `resume_parallel` run several samplers on one model at
+  once, one scoped `std` thread each, and return all runs in sampler order. This is the
+  only feature that needs `std`.
 
 ## Minimum supported Rust version
 

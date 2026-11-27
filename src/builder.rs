@@ -138,8 +138,9 @@ impl<T: Coefficient> Builder<T> {
     /// Creates a new variable called `name`, also if the name exists.
     ///
     /// [`Builder::variable`] and [`Problem::variable`] find the first variable of a name.
-    /// Slack bits use this, so constraints with the same name never share slack bits.
-    fn fresh_variable(&mut self, name: &str) -> Var {
+    /// Slack bits use this, so constraints with the same name never share slack bits, and
+    /// encoders use it for names that the caller chooses.
+    pub(crate) fn fresh_variable(&mut self, name: &str) -> Var {
         let var = Var(self.names.len());
         self.names.push(String::from(name));
         self.lookup.entry(String::from(name)).or_insert(var);
@@ -282,6 +283,21 @@ fn slack_weights(max: u32) -> impl Iterator<Item = u32> {
     })
 }
 
+/// An encoded problem: anything that holds a [`Problem`], such as an encoder's encoding.
+///
+/// The [`penalty`](crate::penalty) functions use it to read the model and to check samples
+/// against the constraints, for every encoder.
+pub trait Encoded<T> {
+    /// The QUBO problem with its constraints.
+    fn problem(&self) -> &Problem<T>;
+}
+
+impl<T> Encoded<T> for Problem<T> {
+    fn problem(&self) -> &Problem<T> {
+        self
+    }
+}
+
 /// A QUBO model built by a [`Builder`], with its variable names and constraints.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Problem<T> {
@@ -339,6 +355,27 @@ impl<T: Coefficient> Problem<T> {
         );
 
         self.constraints.iter().filter(|c| !c.is_satisfied(x))
+    }
+
+    /// The names of the violated constraints, in the order they were added.
+    ///
+    /// Encoders add some constraints as several pieces with one name; each name appears
+    /// once, at its first violated piece.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `x.len()` is not the number of variables.
+    #[must_use]
+    pub fn violation_names(&self, x: &[bool]) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+
+        for constraint in self.violations(x) {
+            if !names.contains(&constraint.name) {
+                names.push(constraint.name.clone());
+            }
+        }
+
+        names
     }
 }
 

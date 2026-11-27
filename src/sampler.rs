@@ -21,12 +21,17 @@
 mod adjacency;
 mod annealing;
 mod exhaustive;
+mod metropolis;
+mod tabu;
+mod tempering;
 
 use core::fmt;
 
 pub use annealing::{AnnealingStats, InvalidSchedule, Schedule, SimulatedAnnealing};
 pub use exhaustive::{Exhaustive, ExhaustiveStats};
 use search_core::{Budget, Status};
+pub use tabu::{TabuSearch, TabuStats};
+pub use tempering::{ParallelTempering, TemperingStats};
 
 /// A source of low-energy samples for a model, classical or quantum.
 ///

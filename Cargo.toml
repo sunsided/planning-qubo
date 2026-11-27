@@ -24,6 +24,11 @@ exclude = [
     "rustfmt.toml",
 ]
 
+[features]
+## Runs several samplers on one model at once (`sample_parallel`, `resume_parallel`) on
+## `std::thread::scope`; the one feature that needs `std`.
+parallel = []
+
 [dependencies]
 # exp for the annealing acceptance test; core has no float math in no_std.
 libm = "0.2.16"

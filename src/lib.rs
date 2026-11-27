@@ -10,20 +10,29 @@
 //! - A sampler interface with classical baselines (exhaustive, simulated annealing, tabu search, parallel tempering)
 //! - Export to annealer formats and adapters for quantum frameworks
 //!
-//! Available now: [`Qubo`] and [`Ising`] models with exact conversion in both directions,
-//! the penalty [`Builder`], the [`assignment`] encoder and decoder, and the [`Exhaustive`]
-//! and [`SimulatedAnnealing`] samplers. Samplers reuse their workspace, stop on a
-//! [`Budget`] and [`resume`](Sampler::resume) later.
+//! Available now:
+//!
+//! - [`Qubo`] and [`Ising`] models with exact conversion in both directions, and the penalty
+//!   [`Builder`];
+//! - encoders and decoders for [`assignment`], constraint satisfaction ([`csp`]),
+//!   time-indexed [`scheduling`], time-expanded path finding ([`mapf`]) and [`routing`];
+//! - [`penalty`] weights chosen from the model: a safe bound, or tuned against a sampler;
+//! - the [`Exhaustive`], [`SimulatedAnnealing`], [`TabuSearch`] and [`ParallelTempering`]
+//!   samplers. Samplers reuse their workspace, stop on a [`Budget`] and
+//!   [`resume`](Sampler::resume) later;
+//! - export to D-Wave's Solver API and parsing of its sample sets ([`dwave`]).
 //!
 //! ## Pipeline
 //!
 //! ```mermaid
 //! graph LR
-//!     problem[Assignment problem] -->|encode| builder[Builder]
+//!     problem[Planning problem] -->|encode| builder[Builder]
 //!     builder -->|build| encoded[Problem: QUBO + constraints]
 //!     encoded -->|Sampler| sample[Sample]
-//!     sample -->|decode| plan[Assignment + violations]
+//!     sample -->|decode| plan[Plan + violations]
 //!     encoded -.->|to_ising| ising[Ising]
+//!     encoded -.->|dwave export| qpu[(D-Wave QPU)]
+//!     qpu -.->|parse_answer| sample
 //! ```
 //!
 //! ## Example
@@ -45,6 +54,10 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
+//! The crate is `no_std` and needs `alloc`. The `parallel` feature (which needs `std`) adds
+//! `sample_parallel` and `resume_parallel`: several samplers on one model at once, one
+//! scoped thread each.
+//!
 //! Repository: <https://github.com/sunsided/planning-qubo>
 
 #![no_std]
@@ -55,17 +68,27 @@ extern crate alloc;
 pub mod assignment;
 mod builder;
 mod coefficient;
+pub mod csp;
+pub mod dwave;
 mod ising;
+pub mod mapf;
+#[cfg(feature = "parallel")]
+mod parallel;
+pub mod penalty;
 mod qubo;
+pub mod routing;
 mod sampler;
+pub mod scheduling;
 
-pub use builder::{Builder, Constraint, ConstraintKind, Problem, Var};
+pub use builder::{Builder, Constraint, ConstraintKind, Encoded, Problem, Var};
 pub use coefficient::Coefficient;
 pub use ising::{InexactScale, Ising};
+#[cfg(feature = "parallel")]
+pub use parallel::{RunResult, resume_parallel, sample_parallel};
 pub use qubo::Qubo;
 pub use sampler::{
-    AnnealingStats, Exhaustive, ExhaustiveStats, InvalidSchedule, Run, Sample, SampleError,
-    Sampler, Schedule, SimulatedAnnealing,
+    AnnealingStats, Exhaustive, ExhaustiveStats, InvalidSchedule, ParallelTempering, Run, Sample,
+    SampleError, Sampler, Schedule, SimulatedAnnealing, TabuSearch, TabuStats, TemperingStats,
 };
 pub use search_core::{Budget, Status, Unlimited};
 

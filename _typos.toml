@@ -9,6 +9,10 @@ extend-exclude = [
   "LICENSE-*",
 ]
 
+[default]
+# The RFC 4648 base64 test vectors ("f", "fo", "foo", …) in src/dwave/base64.rs.
+extend-ignore-re = ['\("fo", "Zm8="\)']
+
 [default.extend-words]
 # Project-specific words typos flags wrongly, e.g. `ser = "ser"`. Keep each entry justified.
 

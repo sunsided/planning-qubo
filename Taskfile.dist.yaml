@@ -39,7 +39,8 @@ tasks:
         msg: "target missing - rustup target add {{.NO_STD_TARGET}}"
     cmds:
       # The crate is no_std with alloc; a bare-metal build catches any std use.
-      - cargo build --lib --target {{.NO_STD_TARGET}} --all-features
+      # Without `parallel`, which needs std.
+      - cargo build --lib --target {{.NO_STD_TARGET}}
 
   test:
     desc: Run tests (nextest if installed, cargo test otherwise), then doctests
