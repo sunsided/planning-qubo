@@ -42,6 +42,10 @@ allocation-counter = "0.8.1"
 proptest = "1.12.0"
 rand_pcg = "0.10.3"
 
+[[example]]
+name = "parallel_restarts"
+required-features = ["parallel"]
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--html-in-header", "docs/mermaid.html"]

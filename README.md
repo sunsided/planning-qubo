@@ -110,6 +110,22 @@ counters stops a run early, with the best state so far; `resume` continues it.
 Models store coefficients as `i64` (exact, overflow is checked) or `f64`. The crate is
 `no_std` with `alloc`, and depends on `libm`, `rand_core` and `search-core` only.
 
+## Examples
+
+Each example encodes a small but realistic instance, samples it, decodes the plan and
+checks it against an exact optimum or bound where one is cheap to compute. Run them with
+`cargo run --release --example <name>`, or all at once with `task examples`.
+
+| Example | Problem | Shows |
+|---|---|---|
+| [`delivery_tour`](https://github.com/sunsided/planning-qubo/blob/main/examples/delivery_tour.rs) | A van's tour through seven German cities | `routing`, `penalty::tune`, parallel tempering vs. brute force |
+| [`exam_timetable`](https://github.com/sunsided/planning-qubo/blob/main/examples/exam_timetable.rs) | Exam slots for courses that share students | `csp`, tabu search, named violations when no timetable exists |
+| [`bakery_ovens`](https://github.com/sunsided/planning-qubo/blob/main/examples/bakery_ovens.rs) | A bakery's morning on two ovens, with a delivery deadline | `scheduling` with capacity, deadlines and a precedence |
+| [`warehouse_robots`](https://github.com/sunsided/planning-qubo/blob/main/examples/warehouse_robots.rs) | Three robots crossing a floor around a shelf block | `mapf`, conflict check, lower bound |
+| [`sampler_shootout`](https://github.com/sunsided/planning-qubo/blob/main/examples/sampler_shootout.rs) | Support tickets assigned to engineers | all samplers against the exhaustive optimum, safe vs. tuned penalty |
+| [`dwave_map_colouring`](https://github.com/sunsided/planning-qubo/blob/main/examples/dwave_map_colouring.rs) | Colouring the map of Australia | `dwave` export, a simulated SAPI answer, parsing and decoding |
+| [`parallel_restarts`](https://github.com/sunsided/planning-qubo/blob/main/examples/parallel_restarts.rs) | A tour of nine European capitals | `sample_parallel` (needs `--features parallel`) |
+
 ## Features
 
 - `parallel`: `sample_parallel` and `resume_parallel` run several samplers on one model at
