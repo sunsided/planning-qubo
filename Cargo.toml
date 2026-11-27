@@ -1,6 +1,6 @@
 [package]
 name = "planning-qubo"
-description = "Planning, scheduling and constraint problems as QUBO and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers and QAOA"
+description = "Planning, scheduling and constraint problems as QUBO and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers"
 version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"

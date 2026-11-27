@@ -8,21 +8,26 @@
 [![License](https://img.shields.io/crates/l/planning-qubo)](https://github.com/sunsided/planning-qubo#license)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
-Planning, scheduling and constraint problems as QUBO (quadratic unconstrained binary optimization) and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers and QAOA (quantum approximate optimization algorithm).
+Planning, scheduling and constraint problems as QUBO (quadratic unconstrained binary optimization) and Ising models: encoders, decoders, penalty tuning, classical samplers and export for quantum annealers.
 
 ## Who this is for
 
-- **People with access to a quantum annealer or a QAOA setup** who need planning,
-  scheduling or assignment problems as QUBO or Ising models. The penalty builder turns
-  named variables and constraints (exactly-one, at-most-one, linear with slack bits) into
-  a model, and the decoders map a sample back to a plan and name each violated
-  constraint. The assignment problem has a ready encoder; other problems are built from
-  the same constraints. Export to annealer formats is planned.
-- **Researchers comparing samplers on the same model**: the exhaustive sampler gives the
-  exact optimum of small models, and simulated annealing, with a seeded RNG and a
-  configurable schedule, shows how close a heuristic gets. Both stop on a work budget and
-  resume later, so runs can be time-sliced and measured by the work they did.
-- **Exact experiments and teaching**: `i64` models keep every penalty and every
+- **Anyone who wants a planning problem as a QUBO or Ising model.** Encoders turn
+  assignment, constraint satisfaction, time-indexed scheduling, multi-agent path finding
+  and routing problems into models, and decoders map a sample back to a plan and name
+  each violated constraint. The penalty builder covers other problems with the same
+  constraints (exactly-one, at-most-one, linear with slack bits), and `penalty` picks the
+  weights. The models feed any QUBO solver: the samplers here, quantum-inspired
+  hardware, or a quantum annealer.
+- **Researchers comparing samplers on the same model.** The exhaustive sampler gives the
+  exact optimum of small models. Simulated annealing, tabu search and parallel tempering,
+  each with a seeded RNG, show how close a heuristic gets. All of them stop on a work
+  budget and resume later, so runs can be time-sliced and measured by the work they did.
+  `sample_parallel` runs several at once.
+- **People with access to a D-Wave annealer.** The `dwave` module writes models in the
+  Solver API's format and reads the returned samples back for the decoders. Submitting
+  them over the network is left to a separate adapter.
+- **Exact experiments and teaching.** `i64` models keep every penalty and every
   QUBO-to-Ising conversion exact, so results can be checked against brute force.
 
 It is not for solving these problems fast on a classical machine. A direct solver beats a
@@ -30,7 +35,8 @@ QUBO encoding there: see [task-allocation](https://github.com/sunsided/task-allo
 assignment, [constraint-search](https://github.com/sunsided/constraint-search) for
 constraint satisfaction, [mapf-search](https://github.com/sunsided/mapf-search) for
 multi-agent path finding and [heuristic-search](https://github.com/sunsided/heuristic-search)
-for pathfinding. QAOA on these models is planned in
+for pathfinding. QAOA (the quantum approximate optimization algorithm) on these models is
+planned in
 [quantum-planning](https://github.com/sunsided/quantum-planning).
 
 ## Scope
@@ -39,9 +45,24 @@ for pathfinding. QAOA on these models is planned in
 - Encoders for constraint satisfaction, time-indexed scheduling, assignment and allocation, time-expanded multi-agent path finding and routing
 - Decoders that map samples back to plans and report violated constraints, plus penalty-weight tuning
 - A sampler interface with classical baselines (exhaustive, simulated annealing, tabu search, parallel tempering)
-- Export to annealer formats and adapters for quantum frameworks
+- Export to D-Wave's Solver API; QAOA on these models is planned in quantum-planning
 
-Encodings fit annealers and QAOA as well as classical solvers, so the crate is useful with or without quantum hardware. The problems come from the planning crates: [constraint-search](https://github.com/sunsided/constraint-search), [temporal-control](https://github.com/sunsided/temporal-control), [resource-timeline](https://github.com/sunsided/resource-timeline), [task-allocation](https://github.com/sunsided/task-allocation) and [mapf-search](https://github.com/sunsided/mapf-search).
+An encoder or the builder produces the model; local samplers and an annealer are
+interchangeable sources of samples, and the same decoder turns either into a plan:
+
+```mermaid
+flowchart LR
+    problem["Planning problem<br/>(tasks, CSP, jobs, agents, tour)"] -->|encode| model["Problem<br/>QUBO + named constraints"]
+    builder[Builder] -->|build| model
+    penalty[penalty::safe / tune] -.->|weight P| model
+    model --> samplers["Samplers<br/>exhaustive, annealing,<br/>tabu, tempering"]
+    model -->|dwave export| qpu[(D-Wave QPU)]
+    samplers --> sample[Sample]
+    qpu -->|parse_answer| sample
+    sample -->|decode| plan["Plan + violated constraints"]
+```
+
+Encodings fit classical solvers as well as annealers and, later, QAOA, so the crate is useful with or without quantum hardware. The problems come from the planning crates: [constraint-search](https://github.com/sunsided/constraint-search), [temporal-control](https://github.com/sunsided/temporal-control), [resource-timeline](https://github.com/sunsided/resource-timeline), [task-allocation](https://github.com/sunsided/task-allocation) and [mapf-search](https://github.com/sunsided/mapf-search).
 
 ## Usage
 
