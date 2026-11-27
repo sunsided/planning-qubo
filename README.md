@@ -85,7 +85,9 @@ The `assignment` module encodes the assignment of tasks to agents with capacitie
 decodes a sample into the agent of each task plus the names of the violated constraints.
 The `csp` module encodes constraint satisfaction problems over finite domains with binary
 constraints, one-hot, and decodes a sample into a value per variable and the violated
-constraints by name.
+constraints by name. The `scheduling` module encodes time-indexed scheduling (jobs with
+durations, release times, deadlines and precedences on a resource with a capacity) and
+decodes a sample into start times and the weighted completion time.
 `penalty::safe` picks a penalty weight from the objective that makes every ground state a
 feasible optimum, and `penalty::tune` doubles a small weight until a given sampler returns
 feasible samples. Both take any encoder as a closure from the weight to an encoding.

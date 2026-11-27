@@ -8,6 +8,7 @@ mod csp;
 #[cfg(feature = "parallel")]
 mod parallel;
 mod penalty;
+mod scheduling;
 
 use planning_qubo::{Ising, Problem, Qubo, assignment::Encoding};
 
