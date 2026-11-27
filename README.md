@@ -92,6 +92,10 @@ encodes multi-agent path finding over a time-expanded graph with move variables,
 and swap conflicts are both quadratic, and decodes a sample into one path per agent. The
 `routing` module encodes the shortest tour from a depot through all cities (asymmetric
 distances allowed) and decodes a sample into the tour and its length.
+
+The `dwave` module exports a QUBO or Ising model in the `qp` format of D-Wave's Solver API
+(SAPI), on a caller-given map from variables to solver qubits, and parses the returned
+sample sets back into assignments for the decoders. It does no networking.
 `penalty::safe` picks a penalty weight from the objective that makes every ground state a
 feasible optimum, and `penalty::tune` doubles a small weight until a given sampler returns
 feasible samples. Both take any encoder as a closure from the weight to an encoding.

@@ -10,23 +10,29 @@
 //! - A sampler interface with classical baselines (exhaustive, simulated annealing, tabu search, parallel tempering)
 //! - Export to annealer formats and adapters for quantum frameworks
 //!
-//! Available now: [`Qubo`] and [`Ising`] models with exact conversion in both directions,
-//! the penalty [`Builder`] with [`penalty`] weights chosen from the model (a safe bound, or
-//! tuned against a sampler), the [`assignment`], [`csp`], [`scheduling`], [`mapf`] and
-//! [`routing`] encoders and
-//! decoders, and the [`Exhaustive`],
-//! [`SimulatedAnnealing`], [`TabuSearch`] and [`ParallelTempering`] samplers. Samplers reuse their workspace, stop on a
-//! [`Budget`] and [`resume`](Sampler::resume) later.
+//! Available now:
+//!
+//! - [`Qubo`] and [`Ising`] models with exact conversion in both directions, and the penalty
+//!   [`Builder`];
+//! - encoders and decoders for [`assignment`], constraint satisfaction ([`csp`]),
+//!   time-indexed [`scheduling`], time-expanded path finding ([`mapf`]) and [`routing`];
+//! - [`penalty`] weights chosen from the model: a safe bound, or tuned against a sampler;
+//! - the [`Exhaustive`], [`SimulatedAnnealing`], [`TabuSearch`] and [`ParallelTempering`]
+//!   samplers. Samplers reuse their workspace, stop on a [`Budget`] and
+//!   [`resume`](Sampler::resume) later;
+//! - export to D-Wave's Solver API and parsing of its sample sets ([`dwave`]).
 //!
 //! ## Pipeline
 //!
 //! ```mermaid
 //! graph LR
-//!     problem[Assignment problem] -->|encode| builder[Builder]
+//!     problem[Planning problem] -->|encode| builder[Builder]
 //!     builder -->|build| encoded[Problem: QUBO + constraints]
 //!     encoded -->|Sampler| sample[Sample]
-//!     sample -->|decode| plan[Assignment + violations]
+//!     sample -->|decode| plan[Plan + violations]
 //!     encoded -.->|to_ising| ising[Ising]
+//!     encoded -.->|dwave export| qpu[(D-Wave QPU)]
+//!     qpu -.->|parse_answer| sample
 //! ```
 //!
 //! ## Example
@@ -63,6 +69,7 @@ pub mod assignment;
 mod builder;
 mod coefficient;
 pub mod csp;
+pub mod dwave;
 mod ising;
 pub mod mapf;
 #[cfg(feature = "parallel")]
