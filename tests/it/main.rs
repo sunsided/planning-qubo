@@ -4,6 +4,8 @@ mod allocations;
 mod assignment;
 mod budget;
 mod conversion;
+#[cfg(feature = "parallel")]
+mod parallel;
 
 use planning_qubo::{Ising, Problem, Qubo, assignment::Encoding};
 

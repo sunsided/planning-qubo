@@ -23,7 +23,8 @@ applyTo: ".github/workflows/**,Taskfile.dist.yaml,**/Taskfile.dist.yaml,.pre-com
   verification job.
 - CI jobs: `branch`, `fmt`, `clippy`, `style`, `doc`, `test` (Linux only), `coverage`,
   `deny`, `msrv`, `semver`, `no-std`, plus `actionlint` and `zizmor` in `actions-lint.yml`.
-- `no-std` mirrors `task build:no-std`: the library for `thumbv7em-none-eabihf`. Do not drop it.
+- `no-std` mirrors `task build:no-std`: the library for `thumbv7em-none-eabihf`, without the
+  `parallel` feature (it needs `std`). Do not drop it.
 - `msrv` checks the library only (`cargo hack check --rust-version --all-features`, no
   `--all-targets`): dev-dependencies may need a newer Rust. Do not add `--all-targets` back.
 - No `Cargo.lock` is tracked: this is a library. CI resolves fresh from crates.io, and no

@@ -22,8 +22,9 @@ applyTo: "**/*.rs"
   reason. Each unsafe block has one operation and a `// SAFETY:` comment.
 - The crate is `#![no_std]` with `alloc` (the CI `no-std` job). Its runtime dependencies are
   `libm` (float math), `rand_core` (the RNG trait) and `search-core` (the `Budget` trait). Flag any other new `[dependencies]`
-  entry, any `std` use, and any feature-gated item without its `#[cfg]` on the re-export in
-  `lib.rs`.
+  entry, any `std` use outside the `parallel` feature's module (`src/parallel.rs`, which
+  declares `extern crate std`), and any feature-gated item without its `#[cfg]` on the
+  re-export in `lib.rs`.
 - Float math (`exp`, `log`, `pow`, `sqrt`) goes through `libm`; `core` has none of it.
 - Model coefficients are generic over `Coefficient` (`i64` exact, `f64` for export). Its
   arithmetic methods are checked for `i64`; do not use `+`/`*` on generic coefficients.

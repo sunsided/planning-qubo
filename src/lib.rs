@@ -45,6 +45,10 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
+//! The crate is `no_std` and needs `alloc`. The `parallel` feature (which needs `std`) adds
+//! `sample_parallel` and `resume_parallel`: several samplers on one model at once, one
+//! scoped thread each.
+//!
 //! Repository: <https://github.com/sunsided/planning-qubo>
 
 #![no_std]
@@ -56,12 +60,16 @@ pub mod assignment;
 mod builder;
 mod coefficient;
 mod ising;
+#[cfg(feature = "parallel")]
+mod parallel;
 mod qubo;
 mod sampler;
 
 pub use builder::{Builder, Constraint, ConstraintKind, Problem, Var};
 pub use coefficient::Coefficient;
 pub use ising::{InexactScale, Ising};
+#[cfg(feature = "parallel")]
+pub use parallel::{RunResult, resume_parallel, sample_parallel};
 pub use qubo::Qubo;
 pub use sampler::{
     AnnealingStats, Exhaustive, ExhaustiveStats, InvalidSchedule, ParallelTempering, Run, Sample,

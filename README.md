@@ -83,8 +83,9 @@ assert_eq!(ising.energy(sample.bits), 4 * sample.energy);
 
 The `assignment` module encodes the assignment of tasks to agents with capacities, and
 decodes a sample into the agent of each task plus the names of the violated constraints.
-`SimulatedAnnealing` samples larger models from any seedable `rand_core` RNG, on a
-schedule that it derives from the model or that you set.
+`SimulatedAnnealing`, `TabuSearch` and `ParallelTempering` sample larger models from any
+seedable `rand_core` RNG. Annealing and tempering use a schedule that they derive from the
+model or that you set.
 
 Each sampler owns a reusable workspace: a warm call allocates nothing, and the result
 borrows the best state from the workspace. A `search_core::Budget` over the sampler's work
@@ -92,6 +93,12 @@ counters stops a run early, with the best state so far; `resume` continues it.
 
 Models store coefficients as `i64` (exact, overflow is checked) or `f64`. The crate is
 `no_std` with `alloc`, and depends on `libm`, `rand_core` and `search-core` only.
+
+## Features
+
+- `parallel`: `sample_parallel` and `resume_parallel` run several samplers on one model at
+  once, one scoped `std` thread each, and return all runs in sampler order. This is the
+  only feature that needs `std`.
 
 ## Minimum supported Rust version
 
