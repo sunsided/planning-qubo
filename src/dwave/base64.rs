@@ -78,7 +78,18 @@ fn sextet(c: u8) -> Option<u8> {
 /// Unit tests against the RFC 4648 test vectors.
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::{decode, encode};
+
+    proptest! {
+        /// Any bytes round-trip, and any text decodes or fails without a panic.
+        #[test]
+        fn round_trips_and_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..64), text in ".{0,24}") {
+            prop_assert_eq!(decode(&encode(&bytes)), Some(bytes));
+            let _ = decode(&text);
+        }
+    }
 
     /// The RFC 4648 section 10 vectors round-trip.
     #[test]

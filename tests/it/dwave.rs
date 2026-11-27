@@ -9,6 +9,7 @@ use planning_qubo::dwave::{
     self, ExportError, ParseError, ProblemType, QpAnswer, Solver, SolverRef,
 };
 use planning_qubo::{Ising, Qubo, assignment};
+use proptest::prelude::*;
 
 /// A solver whose qubit order is not sorted, so `lin` positions differ from qubit ids.
 const QUBITS: [usize; 5] = [4, 0, 3, 1, 2];
@@ -332,5 +333,152 @@ fn ising_answer_energies_match_the_qubo() {
         #[expect(clippy::cast_precision_loss, reason = "small energies")]
         let recomputed = qubo.energy(x) as f64;
         assert!((sample.energy - recomputed).abs() < 1e-12);
+    }
+}
+
+/// A generated model: linear terms, pair terms, offset, and a qubit layout.
+type Generated = (Vec<i64>, Vec<i64>, i64, Vec<usize>);
+
+/// Up to 6 variables with coefficients from −9 to 9, mapped onto a shuffled set of qubits
+/// (with spare qubits) of a solver whose qubit order is shuffled too.
+fn generated() -> impl Strategy<Value = Generated> {
+    (1..=6_usize).prop_flat_map(|n| {
+        let linear = prop::collection::vec(-9..=9_i64, n);
+        let pairs = prop::collection::vec(-9..=9_i64, n * (n - 1) / 2);
+        let layout = Just((0..n + 3).collect::<Vec<usize>>()).prop_shuffle();
+
+        (linear, pairs, -9..=9_i64, layout)
+    })
+}
+
+/// The QUBO of a generated model.
+fn generated_qubo((linear, pairs, offset, _): &Generated) -> Qubo<i64> {
+    let n = linear.len();
+    let mut qubo = Qubo::new(n);
+    qubo.add_offset(*offset);
+
+    for (i, &a) in linear.iter().enumerate() {
+        qubo.add_linear(i, a);
+    }
+
+    let mut k = 0;
+    for i in 0..n {
+        for j in i + 1..n {
+            qubo.add_quadratic(i, j, pairs[k]);
+            k += 1;
+        }
+    }
+
+    qubo
+}
+
+/// A raw-mode answer with every assignment of `n` variables, packed for `qubits` in the given
+/// order, with energies from `energy` (offset excluded).
+fn every_assignment(
+    n: usize,
+    qubits: &[usize],
+    energy: impl Fn(&[bool]) -> f64,
+) -> (String, String, String, Vec<Vec<bool>>) {
+    let width = n.div_ceil(8);
+    let (mut packed, mut energies, mut all) = (Vec::new(), Vec::new(), Vec::new());
+
+    for code in 0..1_u32 << n {
+        let bits: Vec<bool> = (0..n).map(|i| code >> i & 1 == 1).collect();
+        let mut bytes = vec![0_u8; width];
+
+        for (k, variable) in (0..n).rev().enumerate() {
+            bytes[k / 8] |= u8::from(bits[variable]) << (7 - k % 8);
+        }
+
+        packed.extend(bytes);
+        energies.extend(energy(&bits).to_le_bytes());
+        all.push(bits);
+    }
+
+    let active: Vec<u8> = (0..n)
+        .rev()
+        .flat_map(|v| i32::try_from(qubits[v]).expect("small").to_le_bytes())
+        .collect();
+
+    (base64(&active), base64(&packed), base64(&energies), all)
+}
+
+/// Parses an answer and checks the bits and the energies against `energy`.
+fn assert_round_trip(
+    exported: &dwave::Exported,
+    answer: &(String, String, String, Vec<Vec<bool>>),
+    energy: impl Fn(&[bool]) -> f64,
+) -> Result<(), TestCaseError> {
+    let (active, solutions, energies, all) = answer;
+    let parsed = exported
+        .parse_answer(&QpAnswer {
+            active_variables: active,
+            solutions,
+            energies,
+            num_occurrences: None,
+        })
+        .expect("matching answer");
+
+    prop_assert_eq!(parsed.len(), all.len());
+
+    for (sample, bits) in parsed.iter().zip(all) {
+        prop_assert_eq!(&sample.bits, bits);
+        prop_assert!((sample.energy - energy(bits)).abs() < 1e-9);
+    }
+
+    Ok(())
+}
+
+proptest! {
+    /// For random models and qubit layouts, QUBO and Ising exports parse back to the model's
+    /// assignments and energies, offset and Ising scale included.
+    #[test]
+    fn random_models_round_trip(generated in generated()) {
+        let qubo = generated_qubo(&generated);
+        let layout = &generated.3;
+        let n = qubo.num_variables();
+        let qubits = &layout[..n];
+        let couplers: Vec<(usize, usize)> = (0..layout.len())
+            .flat_map(|i| (i + 1..layout.len()).map(move |j| (i, j)))
+            .collect();
+        let full = Solver { qubits: layout, couplers: &couplers };
+
+        #[expect(clippy::cast_precision_loss, reason = "small energies")]
+        let energy = |bits: &[bool]| qubo.energy(bits) as f64;
+
+        let exported = dwave::export_qubo(&qubo, &full, qubits).expect("complete graph");
+        let answer = every_assignment(n, qubits, |b| energy(b) - exported.offset());
+        assert_round_trip(&exported, &answer, energy)?;
+
+        let exported = dwave::export_ising(&qubo.to_ising(), &full, qubits).expect("complete graph");
+        let answer = every_assignment(n, qubits, |b| energy(b) - exported.offset());
+        assert_round_trip(&exported, &answer, energy)?;
+    }
+
+    /// Answers with arbitrary binary fields are errors or samples, never panics.
+    #[test]
+    fn arbitrary_answers_do_not_panic(
+        active in prop::collection::vec(any::<u8>(), 0..16),
+        solutions in prop::collection::vec(any::<u8>(), 0..16),
+        energies in prop::collection::vec(any::<u8>(), 0..32),
+        occurrences in prop::option::of(prop::collection::vec(any::<u8>(), 0..16)),
+        garbage in ".{0,12}",
+    ) {
+        let exported = dwave::export_qubo(&model(), &solver(), &MAP).expect("valid map");
+        let occurrences = occurrences.map(|o| base64(&o));
+        let fields = [base64(&active), base64(&solutions), base64(&energies)];
+
+        let _ = exported.parse_answer(&QpAnswer {
+            active_variables: &fields[0],
+            solutions: &fields[1],
+            energies: &fields[2],
+            num_occurrences: occurrences.as_deref(),
+        });
+        let _ = exported.parse_answer(&QpAnswer {
+            active_variables: &garbage,
+            solutions: &garbage,
+            energies: &garbage,
+            num_occurrences: Some(&garbage),
+        });
     }
 }

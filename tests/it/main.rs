@@ -11,6 +11,7 @@ mod mapf;
 mod parallel;
 mod penalty;
 mod routing;
+mod samplers;
 mod scheduling;
 
 use planning_qubo::{Ising, Problem, Qubo, assignment::Encoding};
