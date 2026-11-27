@@ -3,8 +3,8 @@
 
 use planning_qubo::assignment;
 use planning_qubo::{
-    AnnealingStats, Exhaustive, ExhaustiveStats, Qubo, Sampler, Schedule, SimulatedAnnealing,
-    Status, Unlimited,
+    AnnealingStats, Exhaustive, ExhaustiveStats, ParallelTempering, Qubo, Sampler, Schedule,
+    SimulatedAnnealing, Status, TabuSearch, TabuStats, TemperingStats, Unlimited,
 };
 use rand_core::SeedableRng;
 use rand_pcg::Pcg64Mcg;
@@ -115,4 +115,122 @@ fn annealing_slices_match_one_run() {
 
     assert_eq!(flips, expected.stats.flips);
     assert_eq!(run.sample, expected.sample);
+}
+
+/// A tabu sampler with a fixed seed, 200 moves and tenure 3.
+fn tabu() -> TabuSearch<Pcg64Mcg, i64> {
+    TabuSearch::new(Pcg64Mcg::seed_from_u64(42), 200, 3)
+}
+
+/// A parallel tempering sampler with a fixed seed, 30 rounds and 4 replicas.
+fn tempering() -> ParallelTempering<Pcg64Mcg, i64> {
+    ParallelTempering::new(Pcg64Mcg::seed_from_u64(42), Schedule::from_model(30), 4)
+}
+
+/// Tabu search stops after exactly `n` moves.
+#[test]
+fn tabu_runs_exactly_the_limit() {
+    let qubo = model();
+    let mut sampler = tabu();
+
+    for limit in [0, 1, 17, 199, 200, 500] {
+        let mut budget = |stats: &TabuStats| stats.moves >= limit;
+        let run = sampler.sample(&qubo, &mut budget).expect("any model");
+
+        assert_eq!(run.stats.moves, limit.min(200));
+        assert_eq!(run.status == Status::Finished, limit >= 200);
+    }
+}
+
+/// Parallel tempering stops after exactly `n` flip attempts.
+#[test]
+fn tempering_runs_exactly_the_limit() {
+    let qubo = model();
+    let per_round = 4 * u64::try_from(qubo.num_variables()).expect("few variables");
+    let mut sampler = tempering();
+
+    for limit in [0, 1, 7, per_round, 3 * per_round + 5] {
+        let mut budget = |stats: &TemperingStats| stats.flips >= limit;
+        let run = sampler.sample(&qubo, &mut budget).expect("any model");
+
+        assert_eq!(run.stats.flips, limit);
+        assert_eq!(run.stats.rounds, limit / per_round);
+        assert_eq!(run.status, Status::OutOfBudget);
+    }
+}
+
+/// Slices of 9 moves resume to the same result as one tabu run with the same seed.
+#[test]
+fn tabu_slices_match_one_run() {
+    let qubo = model();
+    let expected = tabu()
+        .sample(&qubo, Unlimited)
+        .expect("any model")
+        .sample
+        .bits
+        .to_vec();
+
+    let mut sliced = tabu();
+    let mut slice = |stats: &TabuStats| stats.moves >= 9;
+    let mut run = sliced.sample(&qubo, &mut slice).expect("any model");
+    let mut moves = run.stats.moves;
+
+    while run.status == Status::OutOfBudget {
+        run = sliced.resume(&mut slice).expect("a run exists");
+        moves += run.stats.moves;
+    }
+
+    assert_eq!(moves, 200);
+    assert_eq!(run.sample.bits, expected);
+}
+
+/// Slices of 13 flips resume to the same result as one tempering run with the same seed.
+#[test]
+fn tempering_slices_match_one_run() {
+    let qubo = model();
+    let mut whole = tempering();
+    let expected = whole.sample(&qubo, Unlimited).expect("any model");
+
+    let mut sliced = tempering();
+    let mut slice = |stats: &TemperingStats| stats.flips >= 13;
+    let mut run = sliced.sample(&qubo, &mut slice).expect("any model");
+    let (mut flips, mut swaps) = (run.stats.flips, run.stats.swaps_accepted);
+
+    while run.status == Status::OutOfBudget {
+        run = sliced.resume(&mut slice).expect("a run exists");
+        flips += run.stats.flips;
+        swaps += run.stats.swaps_accepted;
+    }
+
+    assert_eq!(flips, expected.stats.flips);
+    assert_eq!(swaps, expected.stats.swaps_accepted);
+    assert_eq!(run.sample, expected.sample);
+}
+
+/// Tabu search and parallel tempering reach the exhaustive ground state of the model.
+#[test]
+fn tabu_and_tempering_find_the_ground_state() {
+    let qubo = model();
+    let ground = Exhaustive::new()
+        .sample(&qubo, Unlimited)
+        .expect("few variables")
+        .sample
+        .energy;
+
+    assert_eq!(
+        tabu()
+            .sample(&qubo, Unlimited)
+            .expect("any model")
+            .sample
+            .energy,
+        ground
+    );
+    assert_eq!(
+        tempering()
+            .sample(&qubo, Unlimited)
+            .expect("any model")
+            .sample
+            .energy,
+        ground
+    );
 }

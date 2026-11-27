@@ -4,8 +4,8 @@
 //! run in parallel do not disturb the count.
 
 use planning_qubo::{
-    AnnealingStats, Exhaustive, ExhaustiveStats, Qubo, Sampler, Schedule, SimulatedAnnealing,
-    Unlimited,
+    AnnealingStats, Exhaustive, ExhaustiveStats, ParallelTempering, Qubo, Sampler, Schedule,
+    SimulatedAnnealing, TabuSearch, TabuStats, TemperingStats, Unlimited,
 };
 use rand_core::SeedableRng;
 use rand_pcg::Pcg64Mcg;
@@ -74,6 +74,49 @@ fn warm_annealing_calls_do_not_allocate() {
         let _ = sampler
             .sample(&second, &mut slice)
             .expect("annealing accepts any model");
+        let _ = sampler.resume(Unlimited).expect("a run exists");
+    });
+
+    assert_eq!(info.count_total, 0);
+}
+
+/// Warm tabu calls, on the same model and on a model of the same shape, allocate nothing.
+#[test]
+fn warm_tabu_calls_do_not_allocate() {
+    let (first, second) = (model(0), model(1));
+    let mut sampler = TabuSearch::new(Pcg64Mcg::seed_from_u64(1), 100, 2);
+    let mut slice = |stats: &TabuStats| stats.moves >= 37;
+    let cold = allocation_counter::measure(|| {
+        let _ = sampler.sample(&first, Unlimited).expect("any model");
+    });
+
+    assert!(cold.count_total > 0, "the counter must see the cold call");
+
+    let info = allocation_counter::measure(|| {
+        let _ = sampler.sample(&first, Unlimited).expect("any model");
+        let _ = sampler.sample(&second, &mut slice).expect("any model");
+        let _ = sampler.resume(Unlimited).expect("a run exists");
+    });
+
+    assert_eq!(info.count_total, 0);
+}
+
+/// Warm tempering calls, on the same model and on a model of the same shape, allocate nothing.
+#[test]
+fn warm_tempering_calls_do_not_allocate() {
+    let (first, second) = (model(0), model(1));
+    let rng = Pcg64Mcg::seed_from_u64(1);
+    let mut sampler = ParallelTempering::new(rng, Schedule::from_model(20), 4);
+    let mut slice = |stats: &TemperingStats| stats.flips >= 37;
+    let cold = allocation_counter::measure(|| {
+        let _ = sampler.sample(&first, Unlimited).expect("any model");
+    });
+
+    assert!(cold.count_total > 0, "the counter must see the cold call");
+
+    let info = allocation_counter::measure(|| {
+        let _ = sampler.sample(&first, Unlimited).expect("any model");
+        let _ = sampler.sample(&second, &mut slice).expect("any model");
         let _ = sampler.resume(Unlimited).expect("a run exists");
     });
 

@@ -11,8 +11,8 @@
 //! - Export to annealer formats and adapters for quantum frameworks
 //!
 //! Available now: [`Qubo`] and [`Ising`] models with exact conversion in both directions,
-//! the penalty [`Builder`], the [`assignment`] encoder and decoder, and the [`Exhaustive`]
-//! and [`SimulatedAnnealing`] samplers. Samplers reuse their workspace, stop on a
+//! the penalty [`Builder`], the [`assignment`] encoder and decoder, and the [`Exhaustive`],
+//! [`SimulatedAnnealing`], [`TabuSearch`] and [`ParallelTempering`] samplers. Samplers reuse their workspace, stop on a
 //! [`Budget`] and [`resume`](Sampler::resume) later.
 //!
 //! ## Pipeline
@@ -64,8 +64,8 @@ pub use coefficient::Coefficient;
 pub use ising::{InexactScale, Ising};
 pub use qubo::Qubo;
 pub use sampler::{
-    AnnealingStats, Exhaustive, ExhaustiveStats, InvalidSchedule, Run, Sample, SampleError,
-    Sampler, Schedule, SimulatedAnnealing,
+    AnnealingStats, Exhaustive, ExhaustiveStats, InvalidSchedule, ParallelTempering, Run, Sample,
+    SampleError, Sampler, Schedule, SimulatedAnnealing, TabuSearch, TabuStats, TemperingStats,
 };
 pub use search_core::{Budget, Status, Unlimited};
 
