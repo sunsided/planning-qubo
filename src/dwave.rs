@@ -55,6 +55,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::fmt::Write as _;
 
+use crate::qubo::ordered;
 use crate::{Coefficient, Ising, Qubo};
 
 /// The SAPI problem type.
@@ -304,11 +305,6 @@ fn invert(
     }
 
     Ok(variable_of)
-}
-
-/// The pair `(a, b)` in ascending order.
-fn ordered(a: usize, b: usize) -> (usize, usize) {
-    if a < b { (a, b) } else { (b, a) }
 }
 
 /// The little-endian bytes of `values`.

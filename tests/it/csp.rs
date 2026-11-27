@@ -133,3 +133,25 @@ fn self_constraints_restrict_values() {
 
     assert_eq!(encoding.decode(run.sample.bits).values, [Some(1)]);
 }
+
+/// Two variables with the same name keep their own one-hot bits.
+#[test]
+fn same_name_variables_stay_separate() {
+    let mut csp = Csp::new();
+    let first = csp.add_variable("x", 2);
+    let second = csp.add_variable("x", 2);
+    csp.all_different("differ", &[first, second]);
+
+    let encoding = csp.encode(1_i64);
+    assert_eq!(encoding.problem().qubo().num_variables(), 4);
+    assert_ne!(encoding.variable(first, 0), encoding.variable(second, 0));
+
+    let mut sampler = Exhaustive::new();
+    let run = sampler
+        .sample(encoding.problem().qubo(), Unlimited)
+        .expect("few");
+    let decoded = encoding.decode(run.sample.bits);
+
+    assert_eq!(run.sample.energy, 0);
+    assert!(decoded.values == [Some(0), Some(1)] || decoded.values == [Some(1), Some(0)]);
+}

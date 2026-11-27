@@ -188,7 +188,7 @@ where
             });
         }
 
-        penalty = lower(penalty.plus(penalty), bound);
+        penalty = doubled(penalty, bound);
     }
 }
 
@@ -205,6 +205,15 @@ fn first_weight<T: Coefficient>(objective: &Qubo<T>, bound: T) -> T {
     lower(start, bound)
 }
 
+/// `min(2 · penalty, bound)` for `0 < penalty < bound`, without overflowing on the way.
+fn doubled<T: Coefficient>(penalty: T, bound: T) -> T {
+    if bound.minus(penalty) < penalty {
+        bound
+    } else {
+        penalty.plus(penalty)
+    }
+}
+
 /// The smaller of `a` and `b`.
 fn lower<T: Coefficient>(a: T, b: T) -> T {
     if b < a { b } else { a }
@@ -215,11 +224,30 @@ fn magnitude<T: Coefficient>(v: T) -> T {
     if v < T::ZERO { T::ZERO.minus(v) } else { v }
 }
 
-/// Unit tests for the bounds.
+/// Unit tests for the bounds and the doubling.
 #[cfg(test)]
 mod tests {
-    use super::{largest_coefficient, objective_spread};
-    use crate::Qubo;
+    use super::{largest_coefficient, objective_spread, tune};
+    use crate::{Builder, Exhaustive, Problem, Qubo, Unlimited};
+
+    /// A bound above `i64::MAX / 2` caps the doubled weight instead of overflowing.
+    #[test]
+    fn doubling_near_the_limit_does_not_overflow() {
+        let cost = -(i64::MAX / 2 + 1);
+        let encode = |p: i64| -> Result<Problem<i64>, ()> {
+            let mut builder = Builder::new();
+            let x = builder.variable("x");
+            builder.add_linear(x, cost);
+            builder.exactly_one("never", &[], p);
+            Ok(builder.build())
+        };
+
+        let tuned = tune(encode, &mut Exhaustive::new(), Unlimited).expect("one variable");
+
+        assert!(!tuned.feasible);
+        assert_eq!(tuned.penalty, -cost + 1);
+        assert_eq!(tuned.rounds, 2);
+    }
 
     /// The spread sums all magnitudes except the offset, and bounds the true spread.
     #[test]

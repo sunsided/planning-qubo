@@ -178,3 +178,23 @@ fn invalid_instances_are_errors() {
         Some(MapfError::ZeroHorizon)
     );
 }
+
+/// Self-loops and repeated neighbors in the adjacency lists do not duplicate moves.
+#[test]
+fn self_loops_and_repeated_edges_are_ignored() {
+    // Vertex 0 lists itself and vertex 1 twice; the agent waits at its goal 0.
+    let graph = [vec![0, 1, 1], vec![0]];
+    let encoding = mapf::encode(&graph, &[(0, 0)], 1, 3_i64).expect("valid instance");
+
+    assert_eq!(encoding.problem().qubo().num_variables(), 1);
+
+    let mut sampler = Exhaustive::new();
+    let run = sampler
+        .sample(encoding.problem().qubo(), Unlimited)
+        .expect("few variables");
+    let decoded = encoding.decode(run.sample.bits);
+
+    assert_eq!(run.sample.energy, 0);
+    assert_eq!(decoded.paths, [Some(vec![0, 0])]);
+    assert!(decoded.is_feasible());
+}

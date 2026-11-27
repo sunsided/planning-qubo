@@ -164,7 +164,7 @@ impl Csp {
             .zip(&self.domains)
             .map(|(name, &domain)| {
                 (0..domain)
-                    .map(|v| builder.variable(&format!("{name}={v}")))
+                    .map(|v| builder.fresh_variable(&format!("{name}={v}")))
                     .collect()
             })
             .collect();

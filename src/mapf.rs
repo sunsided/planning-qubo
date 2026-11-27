@@ -215,7 +215,7 @@ fn add_moves<T: Coefficient>(
             let mut step = Vec::new();
 
             for u in (0..graph.len()).filter(|&u| from_start[u] <= t) {
-                let targets = core::iter::once(u).chain(graph[u].as_ref().iter().copied());
+                let targets = core::iter::once(u).chain(neighbors(graph[u].as_ref(), u));
 
                 for w in targets.filter(|&w| to_goal[w] < horizon - t) {
                     let var = builder.variable(&format!("agent{a}.t{t}.{u}-{w}"));
@@ -235,6 +235,16 @@ fn add_moves<T: Coefficient>(
             step
         })
         .collect()
+}
+
+/// The neighbors of `u` in ascending order, without `u` itself and without repeats, so each
+/// move gets one variable.
+fn neighbors(row: &[usize], u: usize) -> Vec<usize> {
+    let mut targets: Vec<usize> = row.iter().copied().filter(|&w| w != u).collect();
+    targets.sort_unstable();
+    targets.dedup();
+
+    targets
 }
 
 /// The edges of `graph` reversed.

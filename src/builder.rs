@@ -138,8 +138,9 @@ impl<T: Coefficient> Builder<T> {
     /// Creates a new variable called `name`, also if the name exists.
     ///
     /// [`Builder::variable`] and [`Problem::variable`] find the first variable of a name.
-    /// Slack bits use this, so constraints with the same name never share slack bits.
-    fn fresh_variable(&mut self, name: &str) -> Var {
+    /// Slack bits use this, so constraints with the same name never share slack bits, and
+    /// encoders use it for names that the caller chooses.
+    pub(crate) fn fresh_variable(&mut self, name: &str) -> Var {
         let var = Var(self.names.len());
         self.names.push(String::from(name));
         self.lookup.entry(String::from(name)).or_insert(var);
